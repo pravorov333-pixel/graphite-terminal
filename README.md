@@ -1,6 +1,6 @@
-# Graphite
+# graphite-terminal
 
-Monochrome, Bloomberg-style terminal for crypto and US index futures (NQ / ES): market data, derivatives, macro,
+Graphite — trading terminal for top-down analysis. Monochrome, Bloomberg-style terminal for crypto and US index futures (NQ / ES): market data, derivatives, macro,
 news with impact levels, company earnings, a top-down checklist and an ICT toolkit whose rules come from the
 author's TradingView indicator (ICT Quantum Probability Suite v21). Everything runs on free, keyless public data.
 
