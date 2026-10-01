@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' wss: https:; img-src 'self' data:">
+<title>Graphite</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand"><b>GRAPHITE</b></div>
+  <div id="focus"></div>
+  <div id="status"></div>
+  <div id="clock"></div>
+</header>
+<nav id="ws"></nav>
+<div id="tape"><div id="tape-track"></div></div>
+<main id="grid"></main>
+<footer>
+  <div id="keys"></div>
+  <div id="cmdline"><span class="prompt">›</span><input id="cmd" spellcheck="false" autocomplete="off" placeholder="начни печатать команду — например  ETH  ·  BTC FR  ·  QQQ ICT 15M  ·  Ctrl+K — все функции"><span id="suggest"></span></div>
+</footer>
+<script src="node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<script src="src/webapi.js"></script>
+<script src="src/core.js"></script>
+<script src="src/ictengine.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/fn/market.js"></script>
+<script src="src/fn/derivs.js"></script>
+<script src="src/fn/book.js"></script>
+<script src="src/fn/macro.js"></script>
+<script src="src/fn/news.js"></script>
+<script src="src/fn/tools.js"></script>
+<script src="src/fn/ict.js"></script>
+<script src="src/fn/plan.js"></script>
+<script src="src/fn/topdown.js"></script>
+<script src="src/fn/macro2.js"></script>
+<script src="src/fn/sys.js"></script>
+<script src="src/fn/guide.js"></script>
+<script src="src/help_ru.js"></script>
+<script src="src/boot.js"></script>
+</body>
+</html>

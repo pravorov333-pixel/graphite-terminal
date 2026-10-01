@@ -1,0 +1,19 @@
+{
+  "name": "quant-terminal",
+  "version": "0.1.0",
+  "description": "Graphite — crypto & macro terminal",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "shot": "electron . --shot",
+    "web": "node server.js"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1"
+  },
+  "dependencies": {
+    "lightweight-charts": "^4.2.3"
+  },
+  "productName": "Graphite"
+}
