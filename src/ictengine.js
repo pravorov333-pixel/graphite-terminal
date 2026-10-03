@@ -18,7 +18,8 @@
   // Pine kill zones (2h each, New York): Asia 20–22, London 02–04, NY AM 08:30–10:30, NY PM 13:30–15:30
   QT.KILLZONES = [["ASIA", 1200, 1320, 0.04], ["LONDON", 120, 240, 0.055], ["NY AM", 510, 630, 0.08], ["NY PM", 810, 930, 0.05]];
 
-  function run(k15, k5, proxy) {
+  // trace (optional array): every first touch of a zone and every key-open entry, for research/step2 backtests
+  function run(k15, k5, proxy, trace) {
     const n15 = k15.length, t15 = k15.map((k) => k[0]), o = k15.map((k) => +k[1]), h = k15.map((k) => +k[2]), l = k15.map((k) => +k[3]), c = k15.map((k) => +k[4]), v = k15.map((k) => +k[5]);
     // ATR14 (Wilder) and volume baseline on 15m
     const atr = new Array(n15).fill(null);
@@ -182,7 +183,10 @@
         const z = zones[i];
         if (t < z.created) continue;
         const isF = z.kind === "FVG", edge = isF ? (z.bull ? z.top : z.bottom) : z.bodyExt;
-        if (!z.touched && (z.bull ? L5 <= edge : H5 >= edge)) { z.touched = true; z.touchT = t; z.sess = S; }
+        if (!z.touched && (z.bull ? L5 <= edge : H5 >= edge)) {
+          z.touched = true; z.touchT = t; z.sess = S;
+          if (trace) trace.push({ kind: z.kind, bull: z.bull, t, j, entry: edge, stop: isF ? (z.bull ? z.bottom : z.top) : z.wickExt, atr: A, sess: S, min: e.min });
+        }
         if (z.touched) {
           z.mfe = Math.max(z.mfe || 0, z.bull ? H5 - edge : edge - L5);
           if (!z.reacted && z.mfe >= P.reactATR * A) { z.reacted = true; ev(z.kind, "react", z.touchT, true, z.sess); }
@@ -204,7 +208,11 @@
           if (cur === "above") { if (s.armed && s.dir === "down" && depth >= P.koMinExcATR * A && zOk) { fire = "LONG"; s.armed = false; } else { s.armed = true; s.dir = "up"; s.ext = H5; } }
           else { if (s.armed && s.dir === "up" && depth >= P.koMinExcATR * A && zOk) { fire = "SHORT"; s.armed = false; } else { s.armed = true; s.dir = "down"; s.ext = L5; } }
           s.side = cur;
-          if (fire) { trials.push({ kind: fire, price: px, t, ext: px, type: KO_T[name], sess: S }); lastKO = { name, kind: fire, t, px }; }
+          if (fire) {
+            trials.push({ kind: fire, price: px, t, ext: px, type: KO_T[name], sess: S }); lastKO = { name, kind: fire, t, px };
+            // entry on the reclaim bar's close, stop 0.5×ATR beyond the level (the indicator's synthetic stop)
+            if (trace) trace.push({ kind: KO_T[name], bull: fire === "LONG", t, j, entry: C5, stop: fire === "LONG" ? px - 0.5 * A : px + 0.5 * A, atr: A, sess: S, min: e.min, atClose: true });
+          }
         } else if (s.armed) s.ext = s.dir === "down" ? Math.min(s.ext, L5) : Math.max(s.ext, H5);
       }
       for (let i = trials.length - 1; i >= 0; i--) {
@@ -278,6 +286,8 @@
     };
     return { stats, base, zones: live, pools: [...pick("BSL"), ...pick("SSL")], opens: openList, atr: A, price, from, to: now, nEvents: events.filter((x) => x.t >= from).length, plan, volSource: proxy ? "CME" : "Binance" };
   }
+
+  QT.ictRun = run;
 
   // shared, cached per symbol: GP and ICT panels on the same symbol reuse one computation
   const cache = {};
