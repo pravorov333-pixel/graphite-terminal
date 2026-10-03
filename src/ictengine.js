@@ -49,7 +49,7 @@
     const events = [];                     // {type, kind: react|sweep|rev|ko, t, win, sess}
     const ev = (type, kind, t, win, sess) => events.push({ type, kind, t, win, sess });
     const zones = [], pools = [], sweeps = [], trials = [];
-    let lastPh = null, lastPl = null, sPh1 = null, sPh2 = null, sPl1 = null, sPl2 = null, lastSweep = null, lastKO = null;
+    let lastPh = null, lastPl = null, sPh1 = null, sPh2 = null, sPl1 = null, sPl2 = null, lastSweep = null, lastKO = null, lastBslT = null, lastSslT = null;
 
     const addPool = (price, kind, tag, start, now) => {
       if (price == null || !isFinite(price)) return;
@@ -78,10 +78,12 @@
       const hiAll = Math.max(...h.slice(i - P.rbL, i + 1)), loAll = Math.min(...l.slice(i - P.rbL, i + 1));
       const bodyTop = Math.max(o[i], c[i]), bodyBot = Math.min(o[i], c[i]), rng = h[i] - l[i];
       const wickOk = (w) => w >= P.wickATR * A && rng > 0 && (w / rng) * 100 >= P.wickPct;
+      const m0 = QT.et(t15[i]).min, inMacro = m0 + 15 > 590 && m0 < 610, span = 15 * MIN;
+      const sweptNear = (st) => st != null && st >= t15[i] - span && st < t15[i] + 2 * span;
       if (h[i] >= hiAll && wickOk(h[i] - bodyTop) && z15[i] >= P.volZ && !dupZone("RB", false, (h[i] + bodyTop) / 2))
-        zones.push({ kind: "RB", bull: false, wickExt: h[i], bodyExt: bodyTop, ce: (h[i] + bodyTop) / 2, start: t15[i], created: now, maxH: P.rbMaxH });
+        zones.push({ kind: "RB", bull: false, wickExt: h[i], bodyExt: bodyTop, ce: (h[i] + bodyTop) / 2, start: t15[i], created: now, maxH: P.rbMaxH, inMacro, swept: sweptNear(lastBslT), vz: z15[i] });
       if (l[i] <= loAll && wickOk(bodyBot - l[i]) && z15[i] >= P.volZ && !dupZone("RB", true, (l[i] + bodyBot) / 2))
-        zones.push({ kind: "RB", bull: true, wickExt: l[i], bodyExt: bodyBot, ce: (l[i] + bodyBot) / 2, start: t15[i], created: now, maxH: P.rbMaxH });
+        zones.push({ kind: "RB", bull: true, wickExt: l[i], bodyExt: bodyBot, ce: (l[i] + bodyBot) / 2, start: t15[i], created: now, maxH: P.rbMaxH, inMacro, swept: sweptNear(lastSslT), vz: z15[i] });
       // Order block: last opposite candle before a displacement candle that closes beyond it
       if (c[i - 1] < o[i - 1] && c[i] > h[i - 1] && c[i] - l[i - 1] >= P.obDispATR * A && z15[i] >= P.obVolZ && !dupZone("OB", true, (h[i - 1] + l[i - 1]) / 2))
         zones.push({ kind: "OB", bull: true, wickExt: l[i - 1], bodyExt: h[i - 1], ce: (h[i - 1] + l[i - 1]) / 2, start: t15[i - 1], created: now, maxH: P.obMaxH });
@@ -167,7 +169,7 @@
       for (let i = pools.length - 1; i >= 0; i--) {
         const p = pools[i], type = POOL_TYPE[p.tag] || "SW";
         const swept = p.kind === "BSL" ? H5 > p.price : L5 < p.price, expired = t - p.created > P.poolMaxH * HR;
-        if (swept) { lastSweep = { kind: p.kind, t, tag: p.tag, price: p.price }; ev(type, "sweep", t, true, S); sweeps.push({ kind: p.kind, price: p.price, t, ext: p.price, type, tag: p.tag }); }
+        if (swept) { lastSweep = { kind: p.kind, t, tag: p.tag, price: p.price }; if (p.kind === "BSL") lastBslT = t; else lastSslT = t; ev(type, "sweep", t, true, S); sweeps.push({ kind: p.kind, price: p.price, t, ext: p.price, type, tag: p.tag }); }
         else if (expired) ev(type, "sweep", t, false, S);
         if (swept || expired) pools.splice(i, 1);
       }
@@ -185,7 +187,7 @@
         const isF = z.kind === "FVG", edge = isF ? (z.bull ? z.top : z.bottom) : z.bodyExt;
         if (!z.touched && (z.bull ? L5 <= edge : H5 >= edge)) {
           z.touched = true; z.touchT = t; z.sess = S;
-          if (trace) trace.push({ kind: z.kind, bull: z.bull, t, j, entry: edge, stop: isF ? (z.bull ? z.bottom : z.top) : z.wickExt, atr: A, sess: S, min: e.min });
+          if (trace) trace.push({ kind: z.kind, bull: z.bull, t, j, entry: edge, stop: isF ? (z.bull ? z.bottom : z.top) : z.wickExt, ce: z.ce, atr: A, sess: S, min: e.min, inMacro: !!z.inMacro, swept: !!z.swept, vz: z.vz, created: z.created });
         }
         if (z.touched) {
           z.mfe = Math.max(z.mfe || 0, z.bull ? H5 - edge : edge - L5);
@@ -211,7 +213,8 @@
           if (fire) {
             trials.push({ kind: fire, price: px, t, ext: px, type: KO_T[name], sess: S }); lastKO = { name, kind: fire, t, px };
             // entry on the reclaim bar's close, stop 0.5×ATR beyond the level (the indicator's synthetic stop)
-            if (trace) trace.push({ kind: KO_T[name], bull: fire === "LONG", t, j, entry: C5, stop: fire === "LONG" ? px - 0.5 * A : px + 0.5 * A, atr: A, sess: S, min: e.min, atClose: true });
+            // s.ext still holds the sweep's extreme beyond the level (the natural ICT stop)
+            if (trace) trace.push({ kind: KO_T[name], bull: fire === "LONG", t, j, entry: C5, stop: fire === "LONG" ? px - 0.5 * A : px + 0.5 * A, level: px, ext: s.ext, atr: A, sess: S, min: e.min, atClose: true });
           }
         } else if (s.armed) s.ext = s.dir === "down" ? Math.min(s.ext, L5) : Math.max(s.ext, H5);
       }
