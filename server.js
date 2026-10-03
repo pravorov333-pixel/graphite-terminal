@@ -14,7 +14,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 const ALLOWED_HOSTS = new Set([
   // markets & derivatives
-  "fapi.binance.com", "api.binance.com", "api.bybit.com", "www.okx.com", "api.hyperliquid.xyz", "www.deribit.com",
+  "fapi.binance.com", "api.binance.com", "api.kraken.com", "api.bybit.com", "www.okx.com", "api.hyperliquid.xyz", "www.deribit.com",
   // macro, rates, positioning, earnings, calendar
   "fred.stlouisfed.org", "home.treasury.gov", "query1.finance.yahoo.com", "publicreporting.cftc.gov", "api.nasdaq.com", "nfs.faireconomy.media",
   // crypto background

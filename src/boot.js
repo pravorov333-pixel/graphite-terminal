@@ -43,6 +43,7 @@
   if ("Notification" in window && Notification.permission === "default") { try { Notification.requestPermission(); } catch {} }
   QT.startMarket();
   QT.startProxies();
+  QT.startFx();
   // headlines for the tape even when no NEWS panel is open
   setTimeout(() => QT.loadNews().catch(() => {}), 4000);
   setInterval(() => QT.loadNews().catch(() => {}), 180000);

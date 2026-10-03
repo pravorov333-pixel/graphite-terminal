@@ -50,7 +50,7 @@
   QT.emit = (evt, data) => (subs[evt] || []).forEach((cb) => { try { cb(data); } catch (e) { console.error(evt, e); } });
 
   // ------------------------------------------------------------ source status
-  const STATUS = { BINANCE: null, STREAM: null, BYBIT: null, OKX: null, HYPERLIQUID: null, DERIBIT: null, MACRO: null, NEWS: null, BOOK: null };
+  const STATUS = { BINANCE: null, STREAM: null, KRAKEN: null, BYBIT: null, OKX: null, HYPERLIQUID: null, DERIBIT: null, MACRO: null, NEWS: null, BOOK: null };
   const sourceOf = (url) =>
     url.includes("binance") ? "BINANCE" : url.includes("bybit") ? "BYBIT" : url.includes("okx") ? "OKX"
       : url.includes("hyperliquid") ? "HYPERLIQUID" : url.includes("deribit") ? "DERIBIT"
@@ -58,7 +58,7 @@
       : /rss|feed|federalreserve\.gov\/feeds|faireconomy/.test(url) ? "NEWS" : "MACRO";
   const STATUS_TIP = {
     BINANCE: "Binance REST: свечи, фандинг, OI, стакан", STREAM: "живые потоки Binance: цены, ликвидации, сделки",
-    BYBIT: "Bybit: фандинг и OI", OKX: "OKX: фандинг и OI", HYPERLIQUID: "Hyperliquid: фандинг и OI", DERIBIT: "Deribit: опционы и фьючерсы",
+    KRAKEN: "Kraken: валютные пары в реальном времени", BYBIT: "Bybit: фандинг и OI", OKX: "OKX: фандинг и OI", HYPERLIQUID: "Hyperliquid: фандинг и OI", DERIBIT: "Deribit: опционы и фьючерсы",
     MACRO: "FRED, Казначейство США, Yahoo, CoinGecko, DefiLlama, mempool", NEWS: "новостные ленты и экономический календарь",
     BOOK: "сервер нашего демо-портфеля (quant-sma-bot)",
   };
@@ -123,7 +123,12 @@
   }
 
   // ------------------------------------------------------------ symbols
-  QT.base = (s) => String(s || "BTC").toUpperCase().replace(/[-_]?(USDT|USDC|PERP|USD)$/, "");
+  // crypto tickers lose a quote suffix (BTCUSDT → BTC); FX pairs keep theirs (EURUSD stays EURUSD)
+  QT.base = (s) => {
+    const u = String(s || "BTC").toUpperCase();
+    if (QT.isFx && QT.isFx(u)) return u;
+    return u.replace(/[-_]?(USDT|USDC|PERP|USD)$/, "");
+  };
   QT.isSymbolToken = (t) => /^[A-Z0-9]{2,12}$/.test(t) && !/^\d+$/.test(t) && !/^\d+(M|H|D|W)$/.test(t);
   QT.tf = (t, def = "1h") => {
     if (!t) return def;
@@ -166,6 +171,19 @@
       if (QT.liqs.length > 5000) QT.liqs.pop();
       QT.emit("liq", ev);
     });
+    // the mini-ticker stream only carries symbols that just traded: seed every market from one 24h snapshot so quiet
+    // ones (stock perps at the weekend, thin pairs) still show a price
+    try {
+      const snap = await QT.get(QT.FAPI + "/fapi/v1/ticker/24hr", 60e3);
+      for (const t of snap) {
+        if (!t.symbol.endsWith("USDT")) continue;
+        const b = t.symbol.slice(0, -4), m = (QT.mkt[b] ||= {});
+        if (m.last) continue;
+        m.last = +t.lastPrice; m.open = +t.openPrice; m.high = +t.highPrice; m.low = +t.lowPrice; m.qvol = +t.quoteVolume;
+        m.chg = +t.priceChangePercent; m.ts = +t.closeTime;
+      }
+      QT.emit("ticker");
+    } catch (e) { console.warn("24h snapshot", e); }
     try {
       const fi = await QT.get(QT.FAPI + "/fapi/v1/fundingInfo", 3600e3);
       for (const x of fi) if (x.symbol.endsWith("USDT")) QT.fundInt[x.symbol.slice(0, -4)] = +x.fundingIntervalHours || 8;
@@ -200,6 +218,7 @@
 
   // Binance perp klines, paging back past the 1500-bar limit
   QT.klines = async (sym, tf, total = 1500, ttl = 30000) => {
+    if (QT.isFx(sym)) return QT.fxBars(sym, tf, total, ttl);       // free FX history is short (Kraken: last 720 bars)
     if (QT.PROXY[sym]) {
       const r = await QT.ensureRatio(sym);
       return (await QT.klines(QT.PROXY[sym].perp, tf, total, ttl)).map((k) => [k[0], k[1] * r, k[2] * r, k[3] * r, k[4] * r, ...k.slice(5)]);
@@ -254,6 +273,57 @@
   QT.startProxies = () => {
     const run = () => Object.keys(QT.PROXY).forEach((s) => QT.calibrate(s).catch((e) => console.warn("calibrate", s, e)));
     run(); setInterval(run, 15 * 60e3);
+  };
+
+  // ------------------------------------------------------------ FX in real time
+  // Kraken runs real fiat order books (EUR/USD ~90k trades a day) and streams them free; its yen book is too thin,
+  // so USD/JPY comes from Yahoo (polled, slightly delayed). Prices land in QT.mkt like any other symbol.
+  QT.FX = { EURUSD: "EUR/USD", GBPUSD: "GBP/USD", USDCAD: "USD/CAD", USDCHF: "USD/CHF", AUDUSD: "AUD/USD", EURCHF: "EUR/CHF" };
+  QT.FXY = { USDJPY: "USDJPY=X" };
+  QT.isFx = (s) => s in QT.FX || s in QT.FXY;
+  QT.startFx = () => {
+    let retry = 0;
+    const open = () => {
+      const ws = new WebSocket("wss://ws.kraken.com/v2");
+      ws.onopen = () => { retry = 0; ws.send(JSON.stringify({ method: "subscribe", params: { channel: "ticker", symbol: Object.values(QT.FX) } })); };
+      ws.onmessage = (m) => {
+        let d; try { d = JSON.parse(m.data); } catch { return; }
+        if (d.channel !== "ticker" || !Array.isArray(d.data)) return;
+        QT.setStatus("KRAKEN", true);
+        for (const t of d.data) {
+          const sym = Object.keys(QT.FX).find((k) => QT.FX[k] === t.symbol); if (!sym) continue;
+          const last = +t.last, cp = +t.change_pct;
+          QT.mkt[sym] = { ...(QT.mkt[sym] || {}), last, high: +t.high, low: +t.low, chg: cp, open: last / (1 + cp / 100), qvol: +t.volume * last, fx: true, ts: Date.now() };
+        }
+        QT.emit("ticker");
+      };
+      ws.onclose = () => { QT.setStatus("KRAKEN", false); setTimeout(open, Math.min(15000, 1000 * 2 ** retry++)); };
+    };
+    open();
+    const yen = async () => {
+      for (const [s, y] of Object.entries(QT.FXY)) {
+        try {
+          const { meta, bars } = await QT.yahoo(y, "1d", "5m", 55000);
+          const last = meta.regularMarketPrice, prev = meta.chartPreviousClose || meta.previousClose;
+          QT.mkt[s] = { ...(QT.mkt[s] || {}), last, open: prev, chg: (last / prev - 1) * 100, high: Math.max(...bars.map((b) => b.h).filter(Number.isFinite)), low: Math.min(...bars.map((b) => b.l).filter(Number.isFinite)), fx: true, delayed: true };
+        } catch {}
+      }
+    };
+    yen(); setInterval(yen, 60000);
+  };
+  // FX candles in Binance kline layout [openTime, o, h, l, c, v, closeTime, quoteVol]
+  const KR_IV = { "1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240, "1d": 1440, "1w": 10080 };
+  const Y_RANGE = { "1m": ["5d", "1m"], "5m": ["1mo", "5m"], "15m": ["1mo", "15m"], "30m": ["1mo", "30m"], "1h": ["6mo", "60m"], "4h": ["1y", "60m"], "1d": ["5y", "1d"], "1w": ["10y", "1wk"] };
+  QT.fxBars = async (sym, tf, limit = 600, ttl = 15000) => {
+    if (QT.FX[sym]) {
+      const iv = KR_IV[tf] || 60;
+      const j = await QT.get(`https://api.kraken.com/0/public/OHLC?pair=${sym}&interval=${iv}`, ttl);
+      const rows = Object.values((j && j.result) || {}).find(Array.isArray) || [];
+      return rows.slice(-limit).map((r) => [r[0] * 1000, +r[1], +r[2], +r[3], +r[4], +r[6], r[0] * 1000 + iv * 60e3 - 1, +r[6] * +r[4]]);
+    }
+    const [range, iv] = Y_RANGE[tf] || ["6mo", "60m"];
+    const { bars } = await QT.yahoo(QT.FXY[sym], range, iv, ttl);
+    return bars.slice(-limit).map((b) => [b.t, b.o, b.h, b.l, b.c, b.v || 0, b.t, 0]);
   };
 
   // ------------------------------------------------------------ book server (Cosmic Quant API)

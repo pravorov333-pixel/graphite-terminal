@@ -123,16 +123,17 @@
   // ============================================================ GP — price chart
   const TFMIN = { "1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "2h": 120, "4h": 240 };
   QT.fn.GP = {
-    name: "Price chart", desc: "Candles, SMA50, session VWAP, volume, ICT levels and zones from the ICT-QPS engine, kill zones, your own lines with alerts. NQ / ES = CME futures points in real time. Args: 1M 5M 15M 1H 4H 1D", sym: true, proxy: true,
+    name: "Price chart", desc: "Candles, SMA50, session VWAP, volume, ICT levels and zones from the ICT-QPS engine, kill zones, your own lines with alerts. NQ / ES = CME futures points in real time; stocks, oil, gold via Binance; FX pairs via Kraken. Args: 1M 5M 15M 1H 4H 1D", sym: true, proxy: true, fx: true,
     tfs: ["1m", "5m", "15m", "1h", "4h", "1d"],
     mount(ctx) {
-      const tf = QT.tfIn(ctx.args, "1h"), s = ctx.sym, src = QT.src(s), proxy = QT.PROXY[s];
+      const tf = QT.tfIn(ctx.args, "1h"), s = ctx.sym, src = QT.src(s), proxy = QT.PROXY[s], fx = QT.isFx(s);
       ctx.setTitle(`${proxy ? proxy.name + " · " : ""}${tf.toUpperCase()} · SMA50 · VWAP`);
       ctx.el.innerHTML = `<div class="chart"></div><div class="gtb"><span class="gb" data-a="lv" title="Пулы ликвидности и ключевые открытия (00:00 / 09:30 / 10:00 NY) с вероятностями">УРОВНИ</span><span class="gb" data-a="zn" title="Rejection / order blocks и FVG (15m) с вероятностью реакции">ЗОНЫ</span><span class="gb" data-a="kz" title="Киллзоны: Азия 20–22, Лондон 02–04, NY AM 08:30–10:30, NY PM 13:30–15:30 (время NY)">КИЛЛЗОНЫ</span><span class="gb" data-a="add">＋ ЛИНИЯ</span><span class="gb" data-a="clr"></span><span class="ghint"></span></div>`;
       const box = ctx.el.firstChild, tb = ctx.el.querySelector(".gtb");
       const chart = QT.chart(box);
       // CLEAN charts (trading / index screens) keep their own toggle set, all ICT layers off by default
-      const clean = ctx.args.includes("CLEAN"), optKey = clean ? "gp.opt.clean" : "gp.opt";
+      // FX: free history is too short for the ICT statistics, so FX charts are always clean (kill zones still work)
+      const clean = ctx.args.includes("CLEAN") || fx, optKey = clean ? "gp.opt.clean" : "gp.opt";
       const opt = clean ? { lv: false, zn: false, kz: false, ...QT.load(optKey, {}) } : { lv: true, zn: true, kz: true, ...QT.load(optKey, {}) };
       const tfMin = TFMIN[tf];
       // killzone shading sits behind everything: a full-height histogram on its own hidden scale
@@ -188,7 +189,7 @@
       // ICT-QPS engine: pools + key opens as price lines, RB / OB / FVG as boxes
       const zov = QT.zoneOverlay(box, chart, candles, () => bars);
       const drawLevels = async () => {
-        if (!opt.lv && !opt.zn) { lvLines = QT.ictLines(candles, { pools: [], opens: [] }, lvLines); zov.set([]); return; }
+        if ((!opt.lv && !opt.zn) || fx) { lvLines = QT.ictLines(candles, { pools: [], opens: [] }, lvLines); zov.set([]); return; }
         try {
           const eng = await QT.ictEngine(s);
           if (dead) return;
@@ -200,10 +201,14 @@
 
       (async () => {
         try {
-          r = await QT.ensureRatio(s);
-          const k = await QT.get(`${QT.FAPI}/fapi/v1/klines?symbol=${src}USDT&interval=${tf}&limit=600`);
+          r = fx ? 1 : await QT.ensureRatio(s);
+          const k = fx ? await QT.fxBars(s, tf, 600) : await QT.get(`${QT.FAPI}/fapi/v1/klines?symbol=${src}USDT&interval=${tf}&limit=600`);
           if (dead) return;
           bars = k.map(toBar);
+          // price precision by instrument: FX 5 decimals (3 for yen pairs), cheap coins more, everything else 2
+          const lp = bars.length ? bars[bars.length - 1].close : 1, dp = fx ? (lp > 50 ? 3 : 5) : lp < 0.01 ? 7 : lp < 1 ? 5 : lp < 10 ? 4 : 2;
+          const pf = { type: "price", precision: dp, minMove: Math.pow(10, -dp) };
+          [candles, sma, vwap].forEach((x) => x.applyOptions({ priceFormat: pf }));
           candles.setData(bars);
           vol.setData(bars.map(volBar));
           paintKz();
@@ -214,16 +219,29 @@
         } catch (e) { ctx.error(e); }
       })();
 
-      const unsub = QT.ws(`${QT.BN_WS}${src.toLowerCase()}usdt@kline_${tf}`, (d) => {
-        const k = d.k; if (!k || !bars.length) return;
-        const b = toBar([k.t, +k.o, +k.h, +k.l, +k.c, k.v, 0, k.q]);
+      const onBar = (b) => {
+        if (!bars.length) return;
         const isNew = b.time > bars[bars.length - 1].time;
         if (bars[bars.length - 1].time === b.time) bars[bars.length - 1] = b; else if (isNew) bars.push(b); else return;
         candles.update(b); vol.update(volBar(b));
         if (isNew && opt.kz && intraday && tfMin) kz.update(kzBar(b));
         const sv = smaAt(bars.length - 1); if (sv) sma.update({ time: b.time, value: sv });
         if (intraday) { const vs = vwapSeries(); vwap.update(vs[vs.length - 1]); }
-      });
+      };
+      let unsub;
+      if (fx) {
+        // FX: re-read the latest candles every 10 s (Kraken live book; the yen pair from Yahoo)
+        const id = setInterval(async () => {
+          if (!bars.length) return;
+          try { (await QT.fxBars(s, tf, 3, 8000)).forEach((k) => onBar(toBar(k))); } catch {}
+        }, 10000);
+        unsub = () => clearInterval(id);
+      } else {
+        unsub = QT.ws(`${QT.BN_WS}${src.toLowerCase()}usdt@kline_${tf}`, (d) => {
+          const k = d.k; if (!k || !bars.length) return;
+          onBar(toBar([k.t, +k.o, +k.h, +k.l, +k.c, k.v, 0, k.q]));
+        });
+      }
 
       tb.addEventListener("mousedown", (e) => e.stopPropagation());
       tb.querySelectorAll(".gb").forEach((btn) => (btn.onclick = (e) => {
@@ -259,7 +277,7 @@
 
   // ============================================================ DUO — two synced charts (NQ / ES by default) with SMT read-out
   QT.fn.DUO = {
-    name: "Twin charts", desc: "Two charts with synced time axis and crosshair, SMT read-out between them. Default NQ ES. Args: two symbols + timeframe, e.g. DUO BTC ETH 15M", sym: false,
+    name: "Twin charts", desc: "Two charts with synced time axis and crosshair, SMT read-out between them. Default NQ ES. Args: two symbols + timeframe, e.g. DUO BTC ETH 15M, DUO EURUSD GBPUSD 5M", sym: false,
     tfs: ["1m", "5m", "15m", "1h", "4h"],
     mount(ctx) {
       const syms = ctx.args.filter((a) => QT.isSymbolToken(a)).map(QT.base);
@@ -295,6 +313,8 @@
             const p = P[i];
             p.bars = k.map((x) => ({ time: x[0] / 1000, open: +x[1], high: +x[2], low: +x[3], close: +x[4] }));
             p.map = new Map(p.bars.map((b) => [b.time, b.close]));
+            const lp = p.bars.length ? p.bars[p.bars.length - 1].close : 1, dp = QT.isFx(p.sym) ? (lp > 50 ? 3 : 5) : lp < 1 ? 5 : lp < 10 ? 4 : 2;
+            p.c.applyOptions({ priceFormat: { type: "price", precision: dp, minMove: Math.pow(10, -dp) } });
             p.c.setData(p.bars);
           });
           const n = P[0].bars.length;

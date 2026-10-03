@@ -2,7 +2,7 @@
   const QT = window.QT, F = QT.f;
 
   const SECTIONS = [
-    ["MARKET", ["WL", "GP", "DUO", "HMAP", "MOV", "DEPTH", "TAPE"]],
+    ["MARKET", ["LIVE", "WL", "GP", "DUO", "HMAP", "MOV", "DEPTH", "TAPE"]],
     ["DERIVATIVES", ["FR", "OI", "BASIS", "LIQ", "LS", "CVD", "OPT"]],
     ["MACRO & BACKGROUND", ["MKTS", "INFL", "NLIQ", "YLD", "COT", "SEAS", "CORR", "DOM", "FNG", "FEES"]],
     ["NEWS & CALENDAR", ["NEWS", "ECO"]],

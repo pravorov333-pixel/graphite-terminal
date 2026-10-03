@@ -57,7 +57,7 @@
 
   // ============================================================ CALC — position sizing & risk
   QT.fn.CALC = {
-    name: "Position calculator", desc: "Size from account risk %, stop and target: quantity, margin, R:R, fees, breakeven, approx. liquidation, funding cost", sym: true, proxy: true,
+    name: "Position calculator", desc: "Size from account risk %, stop and target: quantity, margin, R:R, fees, breakeven, approx. liquidation, funding cost", sym: true, proxy: true, fx: true,
     mount(ctx) {
       const b = ctx.sym, m = QT.mkt[b] || {}, last = m.last || 0;
       const saved = QT.load("calc", { acct: 5000, risk: 1, lev: 5, fee: 0.05 });

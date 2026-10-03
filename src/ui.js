@@ -5,7 +5,7 @@
 
   // ------------------------------------------------------------ workspaces: ready-made screens for one job each
   const WS = [
-    { id: "OVERVIEW", ru: "ОБЗОР", layout: "L5", panels: ["MKTS", "HMAP", "NEWS", "WL", "GP 4H", "ECO", "FNG", "DOM", "MOV"] },
+    { id: "OVERVIEW", ru: "ОБЗОР", layout: "L5", panels: ["LIVE", "HMAP", "NEWS MARKETS", "WL", "GP 4H", "ECO", "FNG", "DOM", "MOV"] },
     { id: "INDEX", ru: "ИНДЕКСЫ", layout: "L4", panels: ["GP NQ 5M CLEAN", "GP ES 5M CLEAN", "MKTS", "ECO"] },
     { id: "TRADE", ru: "ТРЕЙДИНГ", layout: "L2", panels: ["TOPDOWN", "GP NQ 1H CLEAN", "NEWS MARKETS", "EARN", "NLIQ NQ", "ECO"], sizes: { L2: { c: [1.25, 1, 1], r: [1.25, 1] } } },
     { id: "DERIVS", ru: "ДЕРИВАТИВЫ", layout: "L2", panels: ["FR", "OI", "BASIS", "LS", "LIQ", "OPT"] },
@@ -40,6 +40,8 @@
   if (store.v < 4) { delete store.spaces.TRADE; delete store.spaces.INDEX; delete store.spaces.ICT; store.v = 4; }
   // v5: MACRO got inflation, COT positioning and seasonality
   if (store.v < 5) { delete store.spaces.MACRO; store.v = 5; }
+  // v6: OVERVIEW opens with the real-time world board
+  if (store.v < 6) { delete store.spaces.OVERVIEW; store.v = 6; }
   let state = store.spaces[store.cur] || preset(store.cur);
   QT.focusSym = QT.load("focus", "BTC");
   let active = 0, prev = null;
@@ -60,6 +62,7 @@
     // NQ / ES are QQQ / SPY perps rescaled to futures points: price is genuine, but the perp's own flow (funding, OI,
     // tape, book, CVD, long/short) is a tiny Binance market that says nothing about CME — those functions don't run on them
     const blocked = sym && QT.PROXY[sym] && def && !def.proxy;
+    const fxBlocked = sym && QT.isFx(sym) && def && !def.fx;
     const tfNow = def && def.tfs ? ((cfg.args || []).find(QT.isTf) || TFDEF[cfg.code] || def.tfs[1]).toLowerCase() : null;
     p.head.innerHTML = `<span class="no">${i + 1}</span><span class="code" title="Сменить функцию в этой панели">${cfg.code} ▾</span>`
       + (sym ? `<span class="sym">${sym}</span>` : "")
@@ -94,6 +97,10 @@
     p.body.innerHTML = "";
     p.body.scrollTop = 0;
     if (!def) { p.body.innerHTML = `<div class="msg">Нет функции <b>${QT.esc(cfg.code)}</b>. Нажми ☰ ФУНКЦИИ или набери HELP.</div>`; return; }
+    if (fxBlocked) {
+      p.body.innerHTML = `<div class="msg"><b>${cfg.code}</b> для ${sym} не показывается.<br><br>${sym} — валютная пара: цена в реальном времени идёт с ${QT.FX[sym] ? "Kraken" : "Yahoo (с небольшой задержкой)"}. Фандинга, OI, стакана Binance у неё нет, а бесплатной истории (около 720 свечей) не хватает для статистики ICT за 20 дней.<br><br>Для валют работают: <b>GP</b> (график), <b>DUO</b> (два графика, например DUO EURUSD GBPUSD), <b>CALC</b>, вотчлист и алерты.</div>`;
+      return;
+    }
     if (blocked) {
       p.body.innerHTML = `<div class="msg"><b>${cfg.code}</b> для ${sym} не показывается.<br><br>${sym} в терминале — это перп ${QT.src(sym)} на Binance, пересчитанный в пункты фьючерса. Цена у него настоящая (совпадает с ${sym} на 99%), а собственный поток — фандинг, OI, лента, стакан, CVD, лонг/шорт — это маленький рынок Binance, примерно в 2 500 раз меньше CME, и на Nasdaq / S&P он не влияет.<br><br>Ордерфлоу ${sym} смотри в своей торговой платформе (Apex / Tradovate — там данные CME).<br>Для ${sym} в терминале работают: <b>GP</b>, <b>PLAN</b>, <b>ICT</b>, <b>DUO</b>, <b>CALC</b>, <b>NLIQ</b>.</div>`;
       return;
