@@ -36,7 +36,8 @@ Type anywhere to get the command line. `HELP` lists every function, `? ГАЙД`
 the `?` in each panel header explains that panel, `Ctrl+K` opens a searchable function menu.
 A full learning guide in Russian is in [`ГАЙД.txt`](ГАЙД.txt).
 
-Workspaces (tabs, `Alt+1…8`): ОБЗОР, ИНДЕКСЫ, ТРЕЙДИНГ (top-down for NQ), ДЕРИВАТИВЫ, ИДЕИ, МАКРО, ICT, ПОРТФЕЛЬ.
+Workspaces (tabs, `Alt+1…9`): ОБЗОР, ИНДЕКСЫ, ТРЕЙДИНГ (top-down for NQ), ДЕРИВАТИВЫ, ИДЕИ, МАКРО, ICT, СЕТАПЫ
+(live signals for the two backtested NQ/ES entries + a trade journal, see [`research/`](research/README.md)), ПОРТФЕЛЬ.
 Panels can be swapped by dragging their header and resized by dragging the gaps.
 
 A few commands: `NQ GP 5M` · `TOPDOWN ES` · `NQ ICT 15M` · `PLAN NQ` · `NEWS MARKETS HIGH` · `EARN NDX` · `COT ES` · `FR ALL` · `SCR VOL>50M CHG>5`.

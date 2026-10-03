@@ -12,6 +12,7 @@
     { id: "IDEAS", ru: "ИДЕИ", layout: "L1", panels: ["SCR VOL>20M", "FR ALL", "MOV", "HMAP"] },
     { id: "MACRO", ru: "МАКРО", layout: "L5", panels: ["INFL", "YLD", "NLIQ NQ", "COT", "SEAS", "CORR", "MKTS", "DOM", "ECO"] },
     { id: "ICT", ru: "ICT", layout: "L2", panels: ["ICT NQ 15M", "GP NQ 5M", "PLAN NQ", "DUO NQ ES 5M", "CALC NQ", "ECO"] },
+    { id: "SETUP", ru: "СЕТАПЫ", layout: "L2", panels: ["SETUP NQ", "GP NQ 5M", "JOURNAL", "SETUP ES", "GP ES 5M", "ECO"], sizes: { L2: { c: [1, 1.15, 1.35], r: [1, 1] } } },
     { id: "BOOK", ru: "ПОРТФЕЛЬ", layout: "L2", panels: ["PORT", "SIG", "RISK", "ORD", "ALRT", "BASIS"] },
   ];
   const FILL = ["WL", "GP", "FR", "NEWS", "ECO", "MKTS", "LIQ", "GUIDE", "HELP"];
@@ -435,7 +436,7 @@
   function renderKeys() {
     document.getElementById("keys").innerHTML = [
       ...["L1", "L2", "L3", "L4", "L5"].map((l, i) => `<span><b>F${i + 1}</b>${LAYOUT_NAME[l]}${state.layout === l ? " ●" : ""}</span>`),
-      "<span><b>ALT+1-8</b>пространства</span>", "<span><b>ТЯНИ</b>заголовок — поменять панели, щель — размер</span>", "<span><b>CTRL+K</b>функции</span>", "<span><b>CTRL+1-9</b>панель</span>",
+      "<span><b>ALT+1-9</b>пространства</span>", "<span><b>ТЯНИ</b>заголовок — поменять панели, щель — размер</span>", "<span><b>CTRL+K</b>функции</span>", "<span><b>CTRL+1-9</b>панель</span>",
       "<span><b>TAB</b>след. панель</span>", "<span><b>↑↓</b>история</span>", "<span><b>?</b>в панели — пояснение</span>",
     ].join("");
   }
@@ -458,7 +459,7 @@
     document.addEventListener("keydown", (e) => {
       if (pal) return;                                   // the palette handles its own keys
       if (e.ctrlKey && (e.key === "k" || e.key === "K" || e.code === "KeyK")) { e.preventDefault(); return openPalette(active); }
-      if (e.altKey && /^Digit[1-8]$/.test(e.code) && WS[+e.code.slice(5) - 1]) { e.preventDefault(); return QT.switchWs(WS[+e.code.slice(5) - 1].id); }
+      if (e.altKey && /^Digit[1-9]$/.test(e.code) && WS[+e.code.slice(5) - 1]) { e.preventDefault(); return QT.switchWs(WS[+e.code.slice(5) - 1].id); }
       if (/^F[1-5]$/.test(e.key)) { e.preventDefault(); return setLayout("L" + e.key[1]); }
       if (e.key === "Escape") { live.forEach((_, i) => closeHelp(i)); return; }
       if (e.target === cmd) return;

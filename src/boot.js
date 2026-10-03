@@ -44,6 +44,7 @@
   QT.startMarket();
   QT.startProxies();
   QT.startFx();
+  QT.startSetups();          // SETUP signals and their forward log run in the background, panel open or not
   // headlines for the tape even when no NEWS panel is open
   setTimeout(() => QT.loadNews().catch(() => {}), 4000);
   setInterval(() => QT.loadNews().catch(() => {}), 180000);
