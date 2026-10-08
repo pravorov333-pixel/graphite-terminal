@@ -4,13 +4,14 @@ Graphite — trading terminal for top-down analysis. Monochrome, Bloomberg-style
 news with impact levels, company earnings, a top-down checklist and an ICT toolkit whose rules come from the
 author's TradingView indicator (ICT Quantum Probability Suite v21). Everything runs on free, keyless public data.
 
-It ships two ways:
+It ships three ways:
 
-| | Desktop (Electron) | Browser (Node / Docker) |
-|---|---|---|
-| Run | `npm install` → `npm start` | `docker compose up` → http://localhost:8080 |
-| UI | native window, system notifications | same UI in a browser tab |
-| Demo-portfolio panels (PORT, SIG, RISK, ORD) | yes, if `../quant-sma-bot` sits next to it | no (they show a notice) |
+| | Desktop (Electron) | Browser (Node / Docker) | Phone (Android app) |
+|---|---|---|---|
+| Run | `npm install` → `npm start` | `docker compose up` → http://localhost:8080 | install `Graphite.apk` from the [`android-latest`](../../releases/tag/android-latest) release |
+| UI | native window, system notifications | same UI in a browser tab | phone layout: one panel per screen, Android notifications for alerts |
+| Server needed | no | yes (`server.js` proxies the data requests) | no (requests go straight from the phone) |
+| Demo-portfolio panels (PORT, SIG, RISK, ORD) | yes, if `../quant-sma-bot` sits next to it | no (they show a notice) | no |
 
 ## Run
 
@@ -30,6 +31,13 @@ Open http://localhost:8080.
 Screenshot / self-test mode: `npx electron . --shot=out.png --wait=15 --run="WS TRADE"` renders the app headless,
 runs commands, saves a PNG plus a `.log` of console errors, and quits.
 
+**Phone.** The Android app is built by GitHub Actions (`.github/workflows/android.yml`) on every push that touches
+the UI and published as the `android-latest` pre-release. Open that page on the phone, download `Graphite.apk`, allow
+installs from the browser when Android asks. New builds install over the old one and keep the settings.
+On an iPhone (or any phone) the browser version works too: open the server's address and use "Add to Home Screen".
+Building the APK yourself (Node 22, JDK 21, Android SDK): `cd mobile && npm install && npm run apk` →
+`mobile/android/app/build/outputs/apk/debug/app-debug.apk`.
+
 ## Using it
 
 Type anywhere to get the command line. `HELP` lists every function, `? ГАЙД` (top right) is the in-app guide,
@@ -47,7 +55,13 @@ A few commands: `NQ GP 5M` · `TOPDOWN ES` · `NQ ICT 15M` · `PLAN NQ` · `NEWS
 - `main.js` — Electron main process: window, HTTP for the renderer (Chromium `net.fetch`, so no CORS; Electron's
   bundled Node fetch stalls on FRED), spawns the demo-portfolio server if present.
 - `server.js` — the browser version's server: static files + `/api/http` proxy limited to an allow-list of data hosts.
-- `src/webapi.js` — in a browser, provides the same `window.api` the Electron preload does.
+- `src/webapi.js` — in a browser, provides the same `window.api` the Electron preload does; in the Android app it
+  routes requests through Capacitor's native HTTP (no CORS, no server) and turns alerts into Android notifications.
+- `src/mobile.js` + the `html.mobile` block in `styles.css` — the phone layout: one panel per screen, a strip of the
+  workspace's panels, swipe a panel's header to move between them; only the panel on screen runs. On by itself in the
+  app and on screens up to 820px wide; `VIEW MOBILE` / `VIEW DESKTOP` / `VIEW AUTO` overrides it.
+- `mobile/` — the Capacitor shell. `scripts/build-web.js` copies the root files into `mobile/www` (nothing is forked:
+  edit the terminal as usual), `android/` is the native project, `scripts/icons.py` made its icons from `build/icon.png`.
 - `src/core.js` — formatting, cached HTTP, shared WebSockets, alerts, charts, NQ/ES proxy (see below).
 - `src/ui.js` — panels, workspaces, command line, palette, drag-to-swap, resizable grid.
 - `src/ictengine.js` — the ICT engine (port of the Pine indicator): RB / OB / FVG, liquidity pools, key opens, 20-day

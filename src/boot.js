@@ -40,7 +40,8 @@
   }).catch(() => {});
 
   // ------------------------------------------------------------ go
-  if ("Notification" in window && Notification.permission === "default") { try { Notification.requestPermission(); } catch {} }
+  if (window.api.askNotify) window.api.askNotify();
+  else if ("Notification" in window && Notification.permission === "default") { try { Notification.requestPermission(); } catch {} }
   QT.startMarket();
   QT.startProxies();
   QT.startFx();
@@ -48,5 +49,6 @@
   setTimeout(() => QT.loadNews().catch(() => {}), 4000);
   setInterval(() => QT.loadNews().catch(() => {}), 180000);
   QT.initUI();
-  document.getElementById("cmd").focus();
+  if (QT.mobile) QT.initMobile();
+  else document.getElementById("cmd").focus();       // on a phone that would pop the keyboard up over the screen
 })();

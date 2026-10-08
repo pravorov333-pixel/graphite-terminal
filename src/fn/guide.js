@@ -124,10 +124,24 @@
 <li>Терминал показывает данные и статистику. Решения о сделках и риске — твои.</li>
 </ul>`;
 
+  // shown first on a phone (VIEW MOBILE / the Android app)
+  const PHONE = `
+<h2>На телефоне</h2>
+<ul>
+<li>На экране <b>одна панель</b>. Все панели пространства — в полоске под бегущей строкой: нажми нужную. Или <b>проведи пальцем вбок по заголовку</b> панели — следующая / предыдущая.</li>
+<li>Вкладки пространств (ОБЗОР, ТРЕЙДИНГ, ICT…) листаются вбок, как и заголовок панели, если он не влез.</li>
+<li><b>☰</b> внизу слева — список всех функций для текущей панели. Код функции в заголовке панели — то же самое.</li>
+<li>Команды — в строке внизу, как на компьютере: ${c("ETH")}, ${c("BTC FR")}, ${c("NQ ICT 15M")}. Подсказки над строкой нажимаются.</li>
+<li>Нажми на <b>ФОКУС</b> вверху — быстро сменить общую монету.</li>
+<li>Графики: один палец — двигать, два — масштаб.</li>
+<li>Алерты (${c("ALRT BTC > 90000")}) в приложении приходят уведомлением Android. Работают, пока приложение запущено: свёрнутое Android может со временем усыпить.</li>
+<li>Хочешь сетку панелей, как на компьютере — кнопка <b>ВИД ПК</b> в конце вкладок (или ${c("VIEW DESKTOP")}); вернуть — ${c("VIEW MOBILE")}.</li>
+</ul>`;
+
   QT.fn.GUIDE = {
     name: "Guide", desc: "How to use the terminal: workspaces, scenarios, checklists, commands (Russian)", sym: false,
     mount(ctx) {
-      ctx.el.innerHTML = `<div class="guide">${GUIDE}</div>`;
+      ctx.el.innerHTML = `<div class="guide">${QT.mobile ? PHONE : ""}${GUIDE}</div>`;
       ctx.el.querySelectorAll("[data-cmd]").forEach((a) => (a.onclick = () => QT.execFrom(ctx.index, a.dataset.cmd)));
       ctx.el.querySelectorAll("[data-ws]").forEach((a) => (a.onclick = () => QT.switchWs(a.dataset.ws)));
       ctx.setMeta("кликабельно: команды и вкладки");

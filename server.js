@@ -27,9 +27,10 @@ const ALLOWED_HOSTS = new Set([
 // static files the page needs — nothing else on disk is served
 const STATIC = {
   "/": "index.html", "/index.html": "index.html", "/styles.css": "styles.css", "/build/icon.png": "build/icon.png",
+  "/manifest.webmanifest": "manifest.webmanifest",
   "/node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js": "node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js",
 };
-const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".png": "image/png", ".webmanifest": "application/manifest+json" };
 
 function sendFile(res, rel) {
   const file = path.join(ROOT, rel);

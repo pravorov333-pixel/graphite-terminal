@@ -163,7 +163,9 @@ footer { border-top: 1px solid var(--l); }
 /* ---------- function palette */
 .pal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.7); display: flex; justify-content: center; align-items: flex-start; padding-top: 9vh; }
 .pbox { width: min(820px, 92vw); max-height: 76vh; display: flex; flex-direction: column; background: #050505; border: 1px solid var(--mid); box-shadow: 0 20px 80px #000; }
-.ptop { padding: 8px 12px; color: var(--hi); font-size: 11px; letter-spacing: .1em; border-bottom: 1px solid var(--l); }
+.ptop { display: flex; gap: 8px; padding: 8px 12px; color: var(--hi); font-size: 11px; letter-spacing: .1em; border-bottom: 1px solid var(--l); }
+.ptop .px { margin-left: auto; color: var(--mid); cursor: pointer; padding: 0 4px; }
+.ptop .px:hover { color: var(--hi); }
 .pin { background: transparent; border: 0; border-bottom: 1px solid var(--l2); outline: 0; color: var(--hi); font: 15px var(--mono); padding: 10px 12px; }
 .pin::placeholder { color: #444; }
 .plist { overflow: auto; padding-bottom: 6px; }
@@ -247,3 +249,78 @@ a.ecol:hover { color: var(--hi); border-bottom-color: var(--hi); }
 .news tr.imp2 .impb, .news tr.imp2 .imptag { color: var(--fg); }
 .news tr.imp1 a { color: var(--mid); }
 .news tr.imp0 a { color: var(--dim); }
+
+/* ---------- phone layout (html.mobile, see src/mobile.js): one panel per screen, bigger touch targets */
+html.mobile {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --sal: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --sar: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+}
+html.mobile, html.mobile body { height: 100%; height: 100dvh; font-size: 12.5px; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+html.mobile body { grid-template-rows: auto auto auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); padding: var(--sat) var(--sar) 0 var(--sal); }
+html.mobile #top { gap: 10px; padding: 6px 10px; flex-wrap: wrap; row-gap: 3px; }
+html.mobile .brand span { display: none; }
+html.mobile #focus { font-size: 12px; order: 1; }
+html.mobile #clock { min-width: 0; margin-left: auto; font-size: 11px; order: 2; }
+html.mobile #status { order: 3; width: 100%; margin: 0; gap: 9px; font-size: 9.5px; overflow-x: auto; scrollbar-width: none; }
+html.mobile #status::-webkit-scrollbar { display: none; }
+html.mobile #ws { overflow-x: auto; scrollbar-width: none; font-size: 11.5px; }
+html.mobile #ws::-webkit-scrollbar, html.mobile #pstrip::-webkit-scrollbar { display: none; }
+html.mobile #ws .wtab, html.mobile #ws .wbtn { padding: 9px 13px; white-space: nowrap; }
+html.mobile #ws .wsp { flex: 0 0 8px; }
+html.mobile #tape { font-size: 11px; }
+
+html.mobile #pstrip { display: flex; gap: 6px; padding: 6px 8px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--l); background: var(--bg); }
+html.mobile .pchip { flex: none; padding: 5px 10px; border: 1px solid var(--l2); color: var(--mid); font-size: 11.5px; white-space: nowrap; user-select: none; }
+html.mobile .pchip i { font-style: normal; color: var(--dim); margin-right: 6px; }
+html.mobile .pchip em { font-style: normal; color: var(--fg); }
+html.mobile .pchip.on { background: var(--hi); border-color: var(--hi); color: #000; font-weight: 600; }
+html.mobile .pchip.on i, html.mobile .pchip.on em { color: #000; }
+
+html.mobile #grid { display: block; background: var(--p); }
+html.mobile #grid .pn { display: none; height: 100%; }
+html.mobile #grid .pn.active { display: flex; }
+html.mobile .pn.active::after { display: none; }
+html.mobile .pn > header { cursor: default; gap: 7px; padding: 6px 8px; min-height: 36px; overflow-x: auto; scrollbar-width: none; touch-action: pan-y; }
+html.mobile .pn > header::-webkit-scrollbar { display: none; }
+html.mobile .pn > header .no { display: none; }
+html.mobile .pn > header .code { padding: 3px 7px; }
+html.mobile .pn > header .ttl { min-width: 0; }
+html.mobile .pn > header .tfc { padding: 3px 6px; font-size: 11px; }
+html.mobile .pn > header .link, html.mobile .pn > header .qbtn { padding: 3px 7px; border: 1px solid var(--l2); }
+html.mobile .pn > header .symin { font-size: 16px; width: 90px; }
+html.mobile .pb { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+html.mobile .t td { padding: 5px 8px; }
+html.mobile .t th { padding: 5px 8px; }
+html.mobile .kv { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+html.mobile .gtb { flex-wrap: wrap; right: 60px; }
+html.mobile .gtb .gb { padding: 4px 8px; font-size: 11px; }
+html.mobile .form input, html.mobile .form select { font-size: 16px; }
+html.mobile .hov { padding: 10px 14px 24px; }
+
+html.mobile footer { padding-bottom: var(--sab); background: var(--p2); }
+html.mobile #keys { display: none; }
+html.mobile #cmdline { flex-wrap: wrap; gap: 8px; padding: 6px 8px; }
+html.mobile #cmd { font-size: 16px; min-width: 0; padding: 6px 0; }
+html.mobile #suggest { order: -1; width: 100%; max-width: none; font-size: 11.5px; white-space: normal; overflow: visible; }
+html.mobile #suggest:empty { display: none; }
+html.mobile #suggest b { display: inline-block; padding: 3px 6px; border: 1px solid var(--l2); margin-right: 2px; }
+html.mobile .mbtn { flex: none; min-width: 40px; text-align: center; padding: 6px 10px; border: 1px solid var(--l2); color: var(--hi); font-size: 15px; line-height: 1.2; user-select: none; }
+html.mobile .mbtn.go { background: var(--hi); color: #000; border-color: var(--hi); }
+
+html.mobile .pal { padding: var(--sat) 0 0; align-items: stretch; background: rgba(0,0,0,.92); }
+html.mobile .pbox { width: 100%; max-height: none; border: 0; }
+html.mobile .ptop .dim { display: none; }
+html.mobile .pin { font-size: 16px; padding: 12px; }
+html.mobile .pitem { grid-template-columns: 64px 1fr; row-gap: 1px; padding: 8px 12px; border-bottom: 1px solid #101010; }
+html.mobile .pitem .pd { grid-column: 1 / -1; }
+html.mobile .pitem.on { background: transparent; }
+html.mobile .pitem.on b { color: var(--hi); }
+html.mobile .pitem.on .pn1 { color: var(--fg); }
+html.mobile .pitem.on .pd { color: var(--dim); }
+html.mobile .pitem:active { background: #1a1a1a; }
+
+html.mobile .guide { padding: 4px 12px 24px; }
+html.mobile .guide table.gt td:first-child { width: 96px; }

@@ -1,0 +1,69 @@
+# Builds the Android app (mobile/) and publishes the APK as the "android-latest" pre-release:
+# open https://github.com/<owner>/graphite-terminal/releases/tag/android-latest on the phone and install Graphite.apk.
+name: Android APK
+
+on:
+  push:
+    paths:
+      - "index.html"
+      - "styles.css"
+      - "src/**"
+      - "build/icon.png"
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Web assets + Capacitor sync
+        working-directory: mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npm run sync
+
+      - name: Build APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: cp mobile/android/app/build/outputs/apk/debug/app-debug.apk Graphite.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Graphite-apk
+          path: Graphite.apk
+
+      - name: Publish pre-release android-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest Graphite.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Graphite для Android (сборка ${GITHUB_RUN_NUMBER})" \
+            --notes "Ветка ${GITHUB_REF_NAME}, коммит ${GITHUB_SHA::7}. Скачай Graphite.apk на телефоне и установи (разреши установку из этого источника). Новая сборка ставится поверх старой, настройки сохраняются."

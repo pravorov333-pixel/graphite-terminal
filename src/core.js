@@ -8,6 +8,15 @@
   QT.BN_WS_PUB = "wss://fstream.binance.com/public/ws/";
   QT.FAPI = "https://fapi.binance.com";
 
+  // phone layout (src/mobile.js): one panel per screen. On by itself in the Android app and on narrow screens;
+  // the VIEW MOBILE / DESKTOP / AUTO command overrides it and is remembered
+  QT.native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  QT.mobileAuto = QT.native || matchMedia("(max-width: 820px)").matches;
+  let view = null;
+  try { view = JSON.parse(localStorage.getItem("qt.view")); } catch {}
+  QT.mobile = view === "MOBILE" ? true : view === "DESKTOP" ? false : QT.mobileAuto;
+  if (QT.mobile) document.documentElement.classList.add("mobile");
+
   // ------------------------------------------------------------ formatting
   const F = (QT.f = {
     px(v) {
@@ -353,7 +362,8 @@
   QT.notify = (text) => {
     QT.alertLog.unshift({ t: Date.now(), text });
     saveAlerts();
-    try { new Notification(QT.appName || "Terminal", { body: text, silent: false }); } catch {}
+    if (window.api.notify) window.api.notify(QT.appName || "Terminal", text);
+    else try { new Notification(QT.appName || "Terminal", { body: text, silent: false }); } catch {}
     QT.emit("alert-fired", text);
   };
   function fire(a, text) {

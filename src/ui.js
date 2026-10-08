@@ -56,6 +56,9 @@
     p.extra.forEach((f) => { try { f(); } catch {} });
     p.extra = [];
     closeHelp(i);
+    // on a phone only the panel on screen runs; the others start when they're opened (saves data and battery)
+    p.stale = QT.mobile && i !== active;
+    if (p.stale) { p.head.innerHTML = ""; p.body.innerHTML = ""; QT.emit("ui-panels"); return; }
     const def = QT.fn[cfg.code];
     const sym = def && def.sym ? (cfg.pinned && cfg.sym ? cfg.sym : QT.focusSym) : null;
     if (def && def.sym && !cfg.pinned) cfg.sym = sym;
@@ -94,6 +97,7 @@
       cfg.args = [...(cfg.args || []).filter((a) => !QT.isTf(a)), c.dataset.tf.toUpperCase()];
       persist(); mountPanel(i);
     }));
+    QT.emit("ui-panels");
     p.body.innerHTML = "";
     p.body.scrollTop = 0;
     if (!def) { p.body.innerHTML = `<div class="msg">Нет функции <b>${QT.esc(cfg.code)}</b>. Нажми ☰ ФУНКЦИИ или набери HELP.</div>`; return; }
@@ -133,6 +137,7 @@
       + block("ЧТО ПОКАЗЫВАЕТ", r.what) + block("КАК ЧИТАТЬ", r.read) + block("КАК ИСПОЛЬЗОВАТЬ", r.use)
       + (!r.what && !r.read ? `<p class="mid">Пояснения не нужны — это справочная панель.</p>` : "");
     ov.querySelector(".hx").onclick = () => closeHelp(i);
+    ov.style.top = p.head.offsetHeight + "px";
     p.el.appendChild(ov); p.help = ov;
     p.head.querySelector(".qbtn").classList.add("on");
   }
@@ -178,6 +183,7 @@
   function placeSplitters() {
     const g = grid();
     g.querySelectorAll(".spl").forEach((x) => x.remove());
+    if (QT.mobile) return;
     const cs = getComputedStyle(g), W = cs.gridTemplateColumns.split(" ").map(parseFloat), H = cs.gridTemplateRows.split(" ").map(parseFloat);
     if (W.some(isNaN) || H.some(isNaN)) return;
     const gap = 1, edge = (arr, k) => arr.slice(0, k + 1).reduce((a, b) => a + b, 0) + k * gap;
@@ -215,7 +221,7 @@
 
   // ------------------------------------------------------------ drag a panel by its header onto another to swap them
   function startDrag(e, i) {
-    if (e.button !== 0 || e.target.closest(".code,.link,.qbtn,.tfc,.sym,.symin")) return;
+    if (QT.mobile || e.button !== 0 || e.target.closest(".code,.link,.qbtn,.tfc,.sym,.symin")) return;
     const x0 = e.clientX, y0 = e.clientY;
     let ghost = null, target = -1;
     const move = (ev) => {
@@ -250,6 +256,8 @@
     if (i !== active) prev = active;
     active = i;
     live.forEach((p, k) => p.el.classList.toggle("active", k === i));
+    if (live[i].stale) mountPanel(i);
+    QT.emit("ui-panels");
   }
 
   // run a command on behalf of panel `from` (guide, help) without replacing that panel
@@ -282,11 +290,16 @@
     const el = document.getElementById("ws");
     el.innerHTML = WS.map((w, i) => `<span class="wtab ${w.id === store.cur ? "on" : ""}" data-ws="${w.id}" title="Alt+${i + 1}">${w.ru}</span>`).join("")
       + `<span class="wsp"></span><span class="wbtn" data-act="reset" title="Вернуть это пространство к исходному виду">СБРОС</span>`
-      + `<span class="wbtn" data-act="menu" title="Все функции с поиском (Ctrl+K)">☰ ФУНКЦИИ</span><span class="wbtn hi" data-act="guide" title="Как пользоваться терминалом">? ГАЙД</span>`;
+      + `<span class="wbtn" data-act="menu" title="Все функции с поиском (Ctrl+K)">☰ ФУНКЦИИ</span><span class="wbtn hi" data-act="guide" title="Как пользоваться терминалом">? ГАЙД</span>`
+      + (QT.mobile || QT.mobileAuto ? `<span class="wbtn" data-act="view" title="Переключить вид: телефон / компьютер">${QT.mobile ? "ВИД ПК" : "ВИД ТЕЛЕФОН"}</span>` : "");
     el.querySelectorAll("[data-ws]").forEach((t) => (t.onclick = () => QT.switchWs(t.dataset.ws)));
     el.querySelector('[data-act="reset"]').onclick = resetWs;
     el.querySelector('[data-act="menu"]').onclick = () => openPalette(active);
     el.querySelector('[data-act="guide"]').onclick = () => QT.exec(`${active + 1} GUIDE`);
+    const v = el.querySelector('[data-act="view"]');
+    if (v) v.onclick = () => QT.setView(QT.mobile ? "DESKTOP" : "MOBILE");
+    const on = el.querySelector(".wtab.on");
+    if (on && QT.mobile) on.scrollIntoView({ block: "nearest", inline: "center" });
   }
   QT.switchWs = (id) => {
     const w = WS.find((x) => x.id === id || x.ru === id);
@@ -309,7 +322,7 @@
     closePalette();
     pal = document.createElement("div");
     pal.className = "pal";
-    pal.innerHTML = `<div class="pbox"><div class="ptop">ФУНКЦИЯ ДЛЯ ПАНЕЛИ ${target + 1} <span class="dim">· ↑↓ выбрать · Enter открыть · Esc закрыть</span></div>`
+    pal.innerHTML = `<div class="pbox"><div class="ptop">ФУНКЦИЯ ДЛЯ ПАНЕЛИ ${target + 1} <span class="dim">· ↑↓ выбрать · Enter открыть · Esc закрыть</span><span class="px" title="Закрыть">✕</span></div>`
       + `<input class="pin" placeholder="поиск: график, фандинг, ICT, новости…" spellcheck="false"><div class="plist"></div></div>`;
     document.body.appendChild(pal);
     const inp = pal.querySelector(".pin"), list = pal.querySelector(".plist");
@@ -346,9 +359,16 @@
     });
     const scroll = () => { const it = list.querySelector(".pitem.on"); if (it) it.scrollIntoView({ block: "nearest" }); };
     pal.addEventListener("mousedown", (e) => { if (e.target === pal) closePalette(); });
-    draw(); inp.focus();
+    pal.querySelector(".px").onclick = closePalette;
+    draw();
+    if (!QT.mobile) inp.focus();
   }
   function closePalette() { if (pal) { pal.remove(); pal = null; } }
+  QT.closeOverlays = () => {
+    const open = !!pal || live.some((p) => p.help);
+    closePalette(); live.forEach((_, i) => closeHelp(i));
+    return open;
+  };
 
   // ------------------------------------------------------------ command line
   const history = QT.load("history", []);
@@ -369,6 +389,7 @@
     if (t0 === "LAYOUT" && /^[1-5]$/.test(rest[0])) return setLayout("L" + rest[0]);
     if (t0 === "WS" && rest[0]) return rest[0] === "RESET" ? resetWs() : QT.switchWs(rest[0]);
     if (t0 === "MENU") return openPalette(active);
+    if (t0 === "VIEW" && ["MOBILE", "DESKTOP", "AUTO"].includes(rest[0])) return QT.setView(rest[0]);
     if (t0 === "FOCUS" && rest[0] && QT.isSymbolToken(rest[0])) { QT.setFocus(rest[0]); return say(`фокус ${QT.base(rest[0])}: все панели с LINK переключились`); }
     if (t0 === "?") return toggleHelp(active);
     if (t0 === "WL" && (rest[0] === "ADD" || rest[0] === "DEL")) {
@@ -417,6 +438,9 @@
     say(`алерт: ${QT.describeAlert(QT.alerts[QT.alerts.length - 1])}`);
   }
 
+  // VIEW MOBILE / DESKTOP / AUTO: remembered, applied on reload (core.js reads it before anything is drawn)
+  QT.setView = (v) => { persist(); QT.save("view", v === "AUTO" ? null : v); location.reload(); };
+
   function setLayout(l) {
     state.layout = l; persist(); render();
     say(`сетка ${LAYOUT_NAME[l]}`);
@@ -439,6 +463,16 @@
       "<span><b>TAB</b>след. панель</span>", "<span><b>↑↓</b>история</span>", "<span><b>?</b>в панели — пояснение</span>",
     ].join("");
   }
+
+  // what src/mobile.js needs from the screen (panel strip, swipes, ☰ button)
+  QT.ui = {
+    count: () => live.length,
+    active: () => active,
+    panel: (i) => state.panels[i],
+    setActive,
+    menu: () => openPalette(active),
+    help: () => toggleHelp(active),
+  };
 
   QT.initUI = () => {
     const cmd = document.getElementById("cmd");
@@ -472,7 +506,8 @@
     render();
     if (store.firstRun) {
       store.firstRun = false; persist();
-      say("Впервые здесь? Нажми «? ГАЙД» справа вверху — там всё по шагам. Ctrl+K — меню функций.");
+      say(QT.mobile ? "Впервые здесь? Листай панели свайпом по заголовку или полоской сверху. ☰ — функции, ? ГАЙД — всё по шагам."
+        : "Впервые здесь? Нажми «? ГАЙД» справа вверху — там всё по шагам. Ctrl+K — меню функций.");
     }
   };
 })();

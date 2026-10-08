@@ -1,0 +1,19 @@
+{
+  "appId": "com.graphite.terminal",
+  "appName": "Graphite",
+  "webDir": "www",
+  "backgroundColor": "#000000",
+  "android": {
+    "backgroundColor": "#000000"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover",
+      "style": "DARK"
+    },
+    "LocalNotifications": {
+      "iconColor": "#FFFFFF"
+    }
+  }
+}
