@@ -27,10 +27,11 @@
       let dead = false;
       ctx.onCleanup(() => { dead = true; try { chart.remove(); } catch {} });
 
+      let flt = QT.load("botFlt", "ALL");
       const paint = () => {
         if (dead) return;
         const cfg = QT.setupCfg(), start = cfg.acct, now = Date.now();
-        const all = QT.botTrades(), closed = all.filter((t) => t.state !== "open"), open = all.filter((t) => t.state === "open");
+        const every = QT.botTrades(), all = flt === "ALL" ? every : every.filter((t) => t.setup === flt), closed = all.filter((t) => t.state !== "open"), open = all.filter((t) => t.state === "open");
         const realized = closed.reduce((a, t) => a + t.usd, 0), unreal = open.reduce((a, t) => a + t.usd, 0);
         const day0 = new Date(); day0.setHours(0, 0, 0, 0);
         const wk0 = new Date(day0); wk0.setDate(wk0.getDate() - ((wk0.getDay() + 6) % 7));
@@ -48,10 +49,18 @@
         const wins = closed.filter((t) => t.usd > 0).length, avgR = closed.length ? closed.reduce((a, t) => a + t.res, 0) / closed.length : null;
         const k = [["БАЛАНС", `$${F.num(start + realized + unreal, 0)}`], ["P&L ВСЕГО", usd(realized + unreal)], ["СЕГОДНЯ", usd(sumSince(day0.getTime()))], ["ЭТА НЕДЕЛЯ", usd(sumSince(wk0.getTime()))],
           ["СДЕЛОК", `${closed.length}${open.length ? ` + ${open.length} откр.` : ""}`], ["ПРИБЫЛЬНЫХ", closed.length ? `${Math.round((wins / closed.length) * 100)}%` : "—"], ["СРЕДНИЙ R", rTxt(avgR)], ["МАКС. ПРОСАДКА", dd ? usd(dd) : "$0"]];
-        kpi.className = "kv"; kpi.innerHTML = k.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("");
+        const chips = [["ALL", "ВСЕ"], ["RB", "RB CE"], ["10AM", "10:00"], ["RBF", "RB + ФИБО"]].map(([v, t]) => `<span class="tag${flt === v ? " on" : ""}" data-flt="${v}">${t}</span>`).join("");
+        kpi.className = "kvwrap"; kpi.innerHTML = `<div class="tdsw" style="padding-bottom:6px">${chips}</div><div class="kv">${k.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("")}</div>`;
+        kpi.querySelectorAll("[data-flt]").forEach((x) => (x.onclick = () => { flt = x.dataset.flt; QT.save("botFlt", flt); paint(); }));
 
         // working orders and open positions right now, from the live scans
-        const liveSigs = ["NQ", "ES"].flatMap((s) => ((QT.setups[s] || {}).sigs || []).filter((x) => x.valid && (x.state === "limit" || x.state === "open")));
+        const liveSigs = ["NQ", "ES"].flatMap((s) => ((QT.setups[s] || {}).sigs || []).filter((x) => x.valid && (x.state === "limit" || x.state === "open") && (flt === "ALL" || x.setup === flt)));
+        // per strategy, closed trades
+        const per = ["RB", "10AM", "RBF"].map((k0) => {
+          const c0 = every.filter((t) => t.setup === k0 && t.state !== "open"), n0 = c0.length, w0 = c0.filter((t) => t.usd > 0).length;
+          const r0 = n0 ? c0.reduce((a, t) => a + t.res, 0) / n0 : null, u0 = c0.reduce((a, t) => a + t.usd, 0), bt = (QT.SETUP_BACKTEST || {})[k0];
+          return `<tr><td class="l">${(QT.SETUP_RU || {})[k0]}</td><td>${n0}</td><td>${n0 ? Math.round((w0 / n0) * 100) + "%" : "—"}</td><td>${rTxt(r0)}</td><td>${n0 ? usd(u0) : "—"}</td><td class="dim">${bt ? bt.note : ""}</td></tr>`;
+        }).join("");
         const work = liveSigs.map((x) => {
           const z = QT.setupSize(x.R, x.sym), side = x.bull ? "BUY" : "SELL";
           if (x.state === "limit") return `<tr><td class="l">ОРДЕР</td><td class="l hi">${side} LIMIT ${z ? z.mini : 0} ${z ? z.nm : ""}</td><td>${F.num(x.entry, 2)}</td><td>${F.num(x.stop, 2)}</td><td>${F.num(x.target, 2)}</td><td class="l dim">${(QT.SETUP_RU || {})[x.setup]} · снять в ${new Date(x.t + 48 * 300e3).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</td></tr>`;
@@ -59,10 +68,11 @@
           return `<tr><td class="l">ПОЗИЦИЯ</td><td class="l hi">${x.bull ? "LONG" : "SHORT"} ${t ? t.qty : z ? z.mini : 0} ${z ? z.nm : ""}</td><td>${F.num(x.entry, 2)}</td><td>${F.num(x.stop, 2)}</td><td>${F.num(x.target, 2)}</td><td class="l">${usd(pnl)} · ${rTxt(x.res)}</td></tr>`;
         }).join("");
         const rows = all.slice().reverse().slice(0, 40).map((t) => `<tr data-bt="${t.fillT}" data-bs="${t.sym}" class="click${t.late ? " dim" : ""}" title="${t.late ? "Терминал был закрыт: сделка посчитана по правилам, но вживую ты бы её не получил. " : ""}Клик — показать на графике бота"><td class="l">${dt(t.fillT)}${t.late ? " ◦" : ""}</td><td class="l">${t.unit} ${t.bull ? "▲" : "▼"} ${t.qty}</td><td class="l">${(QT.SETUP_RU || {})[t.setup] || t.setup}</td><td>${F.num(t.entry, 2)}</td><td>${t.exitPx != null ? F.num(t.exitPx, 2) : t.lastPx != null ? F.num(t.lastPx, 2) : "—"}</td><td class="l">${STATE[t.state]}</td><td>${rTxt(t.res)}</td><td>${usd(t.usd)}</td></tr>`).join("");
-        body.innerHTML = `<div class="sec">СЕЙЧАС</div>` + (work ? `<table class="t"><thead><tr><th class="l"></th><th class="l">ЧТО</th><th>ЦЕНА</th><th>СТОП</th><th>ЦЕЛЬ</th><th class="l"></th></tr></thead><tbody>${work}</tbody></table>` : `<div class="note">Ни ордеров, ни позиций — ждём сигнал по тренду (касание края RB или реклейм 10:00).</div>`)
+        body.innerHTML = `<div class="sec">ПО СТРАТЕГИЯМ</div><table class="t"><thead><tr><th class="l">СТРАТЕГИЯ</th><th>СДЕЛОК</th><th>WIN</th><th>СРЕДНИЙ</th><th>$</th><th>БЭКТЕСТ</th></tr></thead><tbody>${per}</tbody></table>`
+          + `<div class="sec">СЕЙЧАС</div>` + (work ? `<table class="t"><thead><tr><th class="l"></th><th class="l">ЧТО</th><th>ЦЕНА</th><th>СТОП</th><th>ЦЕЛЬ</th><th class="l"></th></tr></thead><tbody>${work}</tbody></table>` : `<div class="note">Ни ордеров, ни позиций — ждём сигнал по тренду (касание края RB или реклейм 10:00).</div>`)
           + `<div class="sec">СДЕЛКИ БОТА С ${new Date(QT.sigSince || now).toLocaleDateString("ru-RU")}</div>`
           + (rows ? `<table class="t"><thead><tr><th class="l">ВХОД</th><th class="l">КОНТРАКТЫ</th><th class="l">СЕТАП</th><th>ЦЕНА</th><th>ВЫХОД</th><th class="l">ИТОГ</th><th>R</th><th>$</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="note">Сделок ещё не было.</div>`)
-          + `<div class="note">Бумажный счёт: ни одного реального ордера, нигде. Бот берёт <b>каждый</b> сигнал SETUP по тренду строго по правилам: лимит в середину RB (или вход по рынку на реклейме 10:00), стоп, цель 2R, выход через 4 часа. Контракты — микро (MNQ / MES) на риск $${cfg.riskUsd} (меняется в SETUP), счёт $${F.num(start, 0)}. Издержки как у CME (~1 пункт NQ на круг). ◦ — сигнал пришёл, когда терминал был закрыт: по правилам он считается, но вживую ты бы его не взял. Цены — с перпов QQQ/SPY в пунктах фьючерса (±2–4 п.), поэтому P&L — оценка, а не выписка брокера. Сравнивай с <b>JOURNAL</b>: там твои реальные сделки.</div>`;
+          + `<div class="note">Бумажный счёт: ни одного реального ордера, нигде. Бот берёт <b>каждый</b> сигнал SETUP по тренду строго по правилам: RB CE — лимит в середину RB, цель 2R; 10:00 — вход по рынку на реклейме, цель 2R; RB + фибо — лимит на открытие RB в зоне 0.62–0.79, цель 5R, ≤ 3 сделок в день и стоп после 2 убытков подряд. Контракты — микро (MNQ / MES) на риск $${cfg.riskUsd} (меняется в SETUP), счёт $${F.num(start, 0)}. Издержки как у CME (~1 пункт NQ на круг). ◦ — сигнал пришёл, когда терминал был закрыт: по правилам он считается, но вживую ты бы его не взял. Цены — с перпов QQQ/SPY в пунктах фьючерса (±2–4 п.), поэтому P&L — оценка, а не выписка брокера. Сравнивай с <b>JOURNAL</b>: там твои реальные сделки.</div>`;
         body.querySelectorAll("tr[data-bt]").forEach((tr) => (tr.onclick = () => QT.emit("bot-focus", { sym: tr.dataset.bs, t: +tr.dataset.bt })));
         ctx.setMeta(`${usd(realized + unreal)} · ${closed.length} сделок${open.length ? " · в позиции" : ""}`);
       };
@@ -104,7 +114,7 @@
         for (const t of trades) {
           const buyIn = t.bull, cIn = buyIn ? "#f2f2f2" : "#a8a8a8", cOut = buyIn ? "#a8a8a8" : "#f2f2f2";
           const x1 = xAt(t.fillT), y1 = candles.priceToCoordinate(t.entry);
-          const x0 = t.setup === "RB" ? xAt(t.t) : null;
+          const x0 = t.setup === "RB" || t.setup === "RBF" ? xAt(t.t) : null;
           if (x0 != null && y1 != null && t.t < t.fillT) { g.beginPath(); g.arc(x0, y1, 3, 0, Math.PI * 2); g.lineWidth = 1; g.strokeStyle = "#8a8a8a"; g.stroke(); }
           const out = t.exitT != null && t.exitPx != null;
           const x2 = out ? xAt(t.exitT) : null, y2 = out ? candles.priceToCoordinate(t.exitPx) : null;
@@ -135,7 +145,10 @@
         for (const x of ((QT.setups[s] || {}).sigs || []).filter((y) => y.valid && (y.state === "limit" || y.state === "open"))) {
           lines.push(candles.createPriceLine({ price: x.entry, color: "#ffffff", lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: x.state === "limit" ? `ЛИМИТ ${x.bull ? "BUY" : "SELL"}` : `${x.bull ? "LONG" : "SHORT"} ${x.res >= 0 ? "+" : ""}${(x.res || 0).toFixed(2)}R` }));
           lines.push(candles.createPriceLine({ price: x.stop, color: "#8a8a8a", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "СТОП" }));
-          lines.push(candles.createPriceLine({ price: x.target, color: "#e6e6e6", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "ЦЕЛЬ 2R" }));
+          lines.push(candles.createPriceLine({ price: x.target, color: "#e6e6e6", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: x.setup === "RBF" ? "ЦЕЛЬ 5R" : "ЦЕЛЬ 2R" }));
+          // RB + Fibonacci: the current grid's OTE levels (re-anchored on new extremes)
+          if (x.setup === "RBF" && x.state === "limit" && x.fibExt != null) for (const f of [0.62, 0.705, 0.79])
+            lines.push(candles.createPriceLine({ price: x.fibExt - f * (x.fibExt - x.anchor), color: "#6a6a6a", lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: `фибо ${f}` }));
         }
         const closed = trades.filter((t) => t.exitT != null && t.state !== "open"), pnl = closed.reduce((a, t) => a + (t.usd ?? 0), 0);
         ctx.setMeta(`${closed.length} сделок · ${F.sgn(pnl, `${pnl >= 0 ? "+" : "−"}$${F.num(Math.abs(pnl), 0)}`)}`);

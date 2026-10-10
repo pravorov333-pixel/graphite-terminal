@@ -19,7 +19,9 @@
   QT.KILLZONES = [["ASIA", 1200, 1320, 0.04], ["LONDON", 120, 240, 0.055], ["NY AM", 510, 630, 0.08], ["NY PM", 810, 930, 0.05]];
 
   // trace (optional array): every first touch of a zone and every key-open entry, for research/step2 backtests
-  function run(k15, k5, proxy, trace) {
+  // hook (optional function): called after every 5m bar the engine processes (CME hours only for proxies) with the
+  // live state — { j, t, e, A, zones, pools, opens, swept } — so strategies (rbfib.js) can read the engine's context
+  function run(k15, k5, proxy, trace, hook) {
     const n15 = k15.length, t15 = k15.map((k) => k[0]), o = k15.map((k) => +k[1]), h = k15.map((k) => +k[2]), l = k15.map((k) => +k[3]), c = k15.map((k) => +k[4]), v = k15.map((k) => +k[5]);
     // ATR14 (Wilder) and volume baseline on 15m
     const atr = new Array(n15).fill(null);
@@ -123,7 +125,7 @@
       while (p15 < n15 && t15[p15] + 15 * MIN <= t) { detect15(p15, t15[p15] + 15 * MIN); p15++; }
       if (atrNow == null) continue;
       if (closed(e)) continue;
-      const A = atrNow, H5 = h5[j], L5 = l5[j], C5 = c5[j], S = sessOf(e.min);
+      const A = atrNow, H5 = h5[j], L5 = l5[j], C5 = c5[j], S = sessOf(e.min), sweptNow = [];
       const sl = Math.floor(e.min / 30);
       if (sl !== slot || e.date !== slotDate) { if (slot != null && lastC != null) slotEv.push({ t, slot, up: lastC > slotOpen }); slot = sl; slotDate = e.date; slotOpen = o5[j]; }
       if (!day || day.date !== e.date) {
@@ -169,7 +171,7 @@
       for (let i = pools.length - 1; i >= 0; i--) {
         const p = pools[i], type = POOL_TYPE[p.tag] || "SW";
         const swept = p.kind === "BSL" ? H5 > p.price : L5 < p.price, expired = t - p.created > P.poolMaxH * HR;
-        if (swept) { lastSweep = { kind: p.kind, t, tag: p.tag, price: p.price }; if (p.kind === "BSL") lastBslT = t; else lastSslT = t; ev(type, "sweep", t, true, S); sweeps.push({ kind: p.kind, price: p.price, t, ext: p.price, type, tag: p.tag }); }
+        if (swept) { lastSweep = { kind: p.kind, t, tag: p.tag, price: p.price }; if (p.kind === "BSL") lastBslT = t; else lastSslT = t; sweptNow.push({ kind: p.kind, tag: p.tag, price: p.price }); ev(type, "sweep", t, true, S); sweeps.push({ kind: p.kind, price: p.price, t, ext: p.price, type, tag: p.tag }); }
         else if (expired) ev(type, "sweep", t, false, S);
         if (swept || expired) pools.splice(i, 1);
       }
@@ -224,6 +226,7 @@
         if (Math.abs(s.ext - s.price) >= P.reactATR * A) { ev(s.type, "ko", s.t, true, s.sess); trials.splice(i, 1); }
         else if (t - s.t > P.reactMin * MIN) { ev(s.type, "ko", s.t, false, s.sess); trials.splice(i, 1); }
       }
+      if (hook) hook({ j, t, e, A, zones, pools, opens, swept: sweptNow });
     }
 
     // ---- base rate: the same "≥ 1.5×ATR within 60 min" move from every bar, each direction
