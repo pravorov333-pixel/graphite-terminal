@@ -49,14 +49,14 @@
         const wins = closed.filter((t) => t.usd > 0).length, avgR = closed.length ? closed.reduce((a, t) => a + t.res, 0) / closed.length : null;
         const k = [["БАЛАНС", `$${F.num(start + realized + unreal, 0)}`], ["P&L ВСЕГО", usd(realized + unreal)], ["СЕГОДНЯ", usd(sumSince(day0.getTime()))], ["ЭТА НЕДЕЛЯ", usd(sumSince(wk0.getTime()))],
           ["СДЕЛОК", `${closed.length}${open.length ? ` + ${open.length} откр.` : ""}`], ["ПРИБЫЛЬНЫХ", closed.length ? `${Math.round((wins / closed.length) * 100)}%` : "—"], ["СРЕДНИЙ R", rTxt(avgR)], ["МАКС. ПРОСАДКА", dd ? usd(dd) : "$0"]];
-        const chips = [["ALL", "ВСЕ"], ["RB", "RB CE"], ["10AM", "10:00"], ["RBF", "RB + ФИБО"]].map(([v, t]) => `<span class="tag${flt === v ? " on" : ""}" data-flt="${v}">${t}</span>`).join("");
+        const chips = [["ALL", "ВСЕ"], ["RB", "RB CE"], ["10AM", "10:00"], ["RBF", "RB + ФИБО"], ["RBV", "RB ВИДЕО"]].map(([v, t]) => `<span class="tag${flt === v ? " on" : ""}" data-flt="${v}">${t}</span>`).join("");
         kpi.className = "kvwrap"; kpi.innerHTML = `<div class="tdsw" style="padding-bottom:6px">${chips}</div><div class="kv">${k.map(([a, b]) => `<div><span>${a}</span><b>${b}</b></div>`).join("")}</div>`;
         kpi.querySelectorAll("[data-flt]").forEach((x) => (x.onclick = () => { flt = x.dataset.flt; QT.save("botFlt", flt); paint(); }));
 
         // working orders and open positions right now, from the live scans
         const liveSigs = ["NQ", "ES"].flatMap((s) => ((QT.setups[s] || {}).sigs || []).filter((x) => x.valid && (x.state === "limit" || x.state === "open") && (flt === "ALL" || x.setup === flt)));
         // per strategy, closed trades
-        const per = ["RB", "10AM", "RBF"].map((k0) => {
+        const per = ["RB", "10AM", "RBF", "RBV"].map((k0) => {
           const c0 = every.filter((t) => t.setup === k0 && t.state !== "open"), n0 = c0.length, w0 = c0.filter((t) => t.usd > 0).length;
           const r0 = n0 ? c0.reduce((a, t) => a + t.res, 0) / n0 : null, u0 = c0.reduce((a, t) => a + t.usd, 0), bt = (QT.SETUP_BACKTEST || {})[k0];
           return `<tr><td class="l">${(QT.SETUP_RU || {})[k0]}</td><td>${n0}</td><td>${n0 ? Math.round((w0 / n0) * 100) + "%" : "—"}</td><td>${rTxt(r0)}</td><td>${n0 ? usd(u0) : "—"}</td><td class="dim">${bt ? bt.note : ""}</td></tr>`;
@@ -72,7 +72,7 @@
           + `<div class="sec">СЕЙЧАС</div>` + (work ? `<table class="t"><thead><tr><th class="l"></th><th class="l">ЧТО</th><th>ЦЕНА</th><th>СТОП</th><th>ЦЕЛЬ</th><th class="l"></th></tr></thead><tbody>${work}</tbody></table>` : `<div class="note">Ни ордеров, ни позиций — ждём сигнал по тренду (касание края RB или реклейм 10:00).</div>`)
           + `<div class="sec">СДЕЛКИ БОТА С ${new Date(QT.sigSince || now).toLocaleDateString("ru-RU")}</div>`
           + (rows ? `<table class="t"><thead><tr><th class="l">ВХОД</th><th class="l">КОНТРАКТЫ</th><th class="l">СЕТАП</th><th>ЦЕНА</th><th>ВЫХОД</th><th class="l">ИТОГ</th><th>R</th><th>$</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="note">Сделок ещё не было.</div>`)
-          + `<div class="note">Бумажный счёт: ни одного реального ордера, нигде. Бот берёт <b>каждый</b> сигнал SETUP по тренду строго по правилам: RB CE — лимит в середину RB, цель 2R; 10:00 — вход по рынку на реклейме, цель 2R; RB + фибо — лимит на открытие RB в зоне 0.62–0.79, цель 5R, ≤ 3 сделок в день и стоп после 2 убытков подряд. Контракты — микро (MNQ / MES) на риск $${cfg.riskUsd} (меняется в SETUP), счёт $${F.num(start, 0)}. Издержки как у CME (~1 пункт NQ на круг). ◦ — сигнал пришёл, когда терминал был закрыт: по правилам он считается, но вживую ты бы его не взял. Цены — с перпов QQQ/SPY в пунктах фьючерса (±2–4 п.), поэтому P&L — оценка, а не выписка брокера. Сравнивай с <b>JOURNAL</b>: там твои реальные сделки.</div>`;
+          + `<div class="note">Бумажный счёт: ни одного реального ордера, нигде. Бот берёт <b>каждый</b> сигнал SETUP по тренду строго по правилам: RB CE — лимит в середину RB, цель 2R; 10:00 — вход по рынку на реклейме, цель 2R; RB + фибо — лимит на открытие RB в зоне 0.62–0.79, цель 5R, ≤ 3 сделок в день и стоп после 2 убытков подряд; RB по видео — RB в откате импульса (тень в OTE), лимит на начало RB, цель 5R, безубыток после внутреннего хая, те же дневные правила. Контракты — микро (MNQ / MES) на риск $${cfg.riskUsd} (меняется в SETUP), счёт $${F.num(start, 0)}. Издержки как у CME (~1 пункт NQ на круг). ◦ — сигнал пришёл, когда терминал был закрыт: по правилам он считается, но вживую ты бы его не взял. Цены — с перпов QQQ/SPY в пунктах фьючерса (±2–4 п.), поэтому P&L — оценка, а не выписка брокера. Сравнивай с <b>JOURNAL</b>: там твои реальные сделки.</div>`;
         body.querySelectorAll("tr[data-bt]").forEach((tr) => (tr.onclick = () => QT.emit("bot-focus", { sym: tr.dataset.bs, t: +tr.dataset.bt })));
         ctx.setMeta(`${usd(realized + unreal)} · ${closed.length} сделок${open.length ? " · в позиции" : ""}`);
       };
@@ -114,7 +114,7 @@
         for (const t of trades) {
           const buyIn = t.bull, cIn = buyIn ? "#f2f2f2" : "#a8a8a8", cOut = buyIn ? "#a8a8a8" : "#f2f2f2";
           const x1 = xAt(t.fillT), y1 = candles.priceToCoordinate(t.entry);
-          const x0 = t.setup === "RB" || t.setup === "RBF" ? xAt(t.t) : null;
+          const x0 = t.setup === "RB" || t.setup === "RBF" || t.setup === "RBV" ? xAt(t.t) : null;
           if (x0 != null && y1 != null && t.t < t.fillT) { g.beginPath(); g.arc(x0, y1, 3, 0, Math.PI * 2); g.lineWidth = 1; g.strokeStyle = "#8a8a8a"; g.stroke(); }
           const out = t.exitT != null && t.exitPx != null;
           const x2 = out ? xAt(t.exitT) : null, y2 = out ? candles.priceToCoordinate(t.exitPx) : null;
@@ -149,6 +149,10 @@
           // RB + Fibonacci: the current grid's OTE levels (re-anchored on new extremes)
           if (x.setup === "RBF" && x.state === "limit" && x.fibExt != null) for (const f of [0.62, 0.705, 0.79])
             lines.push(candles.createPriceLine({ price: x.fibExt - f * (x.fibExt - x.anchor), color: "#6a6a6a", lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: `фибо ${f}` }));
+          // RB по видео: the leg's grid (discount 0.5 and the OTE levels) and the break-even trigger
+          if (x.setup === "RBV" && x.legX != null) for (const f of [0.5, 0.62, 0.705, 0.79])
+            lines.push(candles.createPriceLine({ price: x.legX - f * (x.legX - x.legO), color: "#6a6a6a", lineWidth: 1, lineStyle: 1, axisLabelVisible: false, title: `фибо ${f}` }));
+          if (x.setup === "RBV" && x.state === "open" && x.ih != null && !x.beOn) lines.push(candles.createPriceLine({ price: x.ih, color: "#9a9a9a", lineWidth: 1, lineStyle: 3, axisLabelVisible: true, title: "БУ после" }));
         }
         const closed = trades.filter((t) => t.exitT != null && t.state !== "open"), pnl = closed.reduce((a, t) => a + (t.usd ?? 0), 0);
         ctx.setMeta(`${closed.length} сделок · ${F.sgn(pnl, `${pnl >= 0 ? "+" : "−"}$${F.num(Math.abs(pnl), 0)}`)}`);

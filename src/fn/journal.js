@@ -4,7 +4,7 @@
   // forward log of SETUP signals and the backtest, so after 2–3 months it's clear what works live and what doesn't.
   // Stored in localStorage ("qt.journal"); CSV export for a backup.
   const PV = { NQ: 20, MNQ: 2, ES: 50, MES: 5 };
-  const SETUPS = [["RB", "RB CE"], ["10AM", "10:00 реклейм"], ["RBF", "RB + фибо"], ["OTHER", "другое"]];
+  const SETUPS = [["RB", "RB CE"], ["10AM", "10:00 реклейм"], ["RBF", "RB + фибо"], ["RBV", "RB по видео"], ["OTHER", "другое"]];
   const SET_RU = Object.fromEntries(SETUPS);
   QT.journal = QT.load("journal", []);
   const save = () => { QT.save("journal", QT.journal); QT.emit("journal"); };
