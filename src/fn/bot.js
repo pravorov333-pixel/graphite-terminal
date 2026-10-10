@@ -58,16 +58,112 @@
           const t = all.find((y) => y.id === x.id), pnl = t ? t.usd : null;
           return `<tr><td class="l">ПОЗИЦИЯ</td><td class="l hi">${x.bull ? "LONG" : "SHORT"} ${t ? t.qty : z ? z.mini : 0} ${z ? z.nm : ""}</td><td>${F.num(x.entry, 2)}</td><td>${F.num(x.stop, 2)}</td><td>${F.num(x.target, 2)}</td><td class="l">${usd(pnl)} · ${rTxt(x.res)}</td></tr>`;
         }).join("");
-        const rows = all.slice().reverse().slice(0, 40).map((t) => `<tr${t.late ? ' class="dim" title="Терминал был закрыт: сделка посчитана по правилам, но вживую ты бы её не получил"' : ""}><td class="l">${dt(t.fillT)}${t.late ? " ◦" : ""}</td><td class="l">${t.unit} ${t.bull ? "▲" : "▼"} ${t.qty}</td><td class="l">${(QT.SETUP_RU || {})[t.setup] || t.setup}</td><td>${F.num(t.entry, 2)}</td><td>${t.exitPx != null ? F.num(t.exitPx, 2) : t.lastPx != null ? F.num(t.lastPx, 2) : "—"}</td><td class="l">${STATE[t.state]}</td><td>${rTxt(t.res)}</td><td>${usd(t.usd)}</td></tr>`).join("");
+        const rows = all.slice().reverse().slice(0, 40).map((t) => `<tr data-bt="${t.fillT}" data-bs="${t.sym}" class="click${t.late ? " dim" : ""}" title="${t.late ? "Терминал был закрыт: сделка посчитана по правилам, но вживую ты бы её не получил. " : ""}Клик — показать на графике бота"><td class="l">${dt(t.fillT)}${t.late ? " ◦" : ""}</td><td class="l">${t.unit} ${t.bull ? "▲" : "▼"} ${t.qty}</td><td class="l">${(QT.SETUP_RU || {})[t.setup] || t.setup}</td><td>${F.num(t.entry, 2)}</td><td>${t.exitPx != null ? F.num(t.exitPx, 2) : t.lastPx != null ? F.num(t.lastPx, 2) : "—"}</td><td class="l">${STATE[t.state]}</td><td>${rTxt(t.res)}</td><td>${usd(t.usd)}</td></tr>`).join("");
         body.innerHTML = `<div class="sec">СЕЙЧАС</div>` + (work ? `<table class="t"><thead><tr><th class="l"></th><th class="l">ЧТО</th><th>ЦЕНА</th><th>СТОП</th><th>ЦЕЛЬ</th><th class="l"></th></tr></thead><tbody>${work}</tbody></table>` : `<div class="note">Ни ордеров, ни позиций — ждём сигнал по тренду (касание края RB или реклейм 10:00).</div>`)
           + `<div class="sec">СДЕЛКИ БОТА С ${new Date(QT.sigSince || now).toLocaleDateString("ru-RU")}</div>`
           + (rows ? `<table class="t"><thead><tr><th class="l">ВХОД</th><th class="l">КОНТРАКТЫ</th><th class="l">СЕТАП</th><th>ЦЕНА</th><th>ВЫХОД</th><th class="l">ИТОГ</th><th>R</th><th>$</th></tr></thead><tbody>${rows}</tbody></table>` : `<div class="note">Сделок ещё не было.</div>`)
           + `<div class="note">Бумажный счёт: ни одного реального ордера, нигде. Бот берёт <b>каждый</b> сигнал SETUP по тренду строго по правилам: лимит в середину RB (или вход по рынку на реклейме 10:00), стоп, цель 2R, выход через 4 часа. Контракты — микро (MNQ / MES) на риск $${cfg.riskUsd} (меняется в SETUP), счёт $${F.num(start, 0)}. Издержки как у CME (~1 пункт NQ на круг). ◦ — сигнал пришёл, когда терминал был закрыт: по правилам он считается, но вживую ты бы его не взял. Цены — с перпов QQQ/SPY в пунктах фьючерса (±2–4 п.), поэтому P&L — оценка, а не выписка брокера. Сравнивай с <b>JOURNAL</b>: там твои реальные сделки.</div>`;
+        body.querySelectorAll("tr[data-bt]").forEach((tr) => (tr.onclick = () => QT.emit("bot-focus", { sym: tr.dataset.bs, t: +tr.dataset.bt })));
         ctx.setMeta(`${usd(realized + unreal)} · ${closed.length} сделок${open.length ? " · в позиции" : ""}`);
       };
       paint();
       const offs = [QT.on("setups", paint), QT.on("siglog", paint)];
       return () => offs.forEach((f) => f());
+    },
+  };
+
+  // ============================================================ BOTGP — the bot's own chart: every paper trade drawn on the candles
+  // Triangles point the way of the order (▲ buy, ▼ sell), their tip sits exactly on the fill price:
+  // hollow = entry, filled = exit; a dotted line joins them, labelled with the result in R. A small ring = the moment the
+  // RB limit was placed (first touch of the zone's edge). Working limit / open position: price lines entry, stop, target.
+  const TFSEC = { "1m": 60, "5m": 300, "15m": 900, "1h": 3600 };
+  QT.fn.BOTGP = {
+    name: "Bot chart", desc: "The paper bot's chart for NQ / ES: candles with every bot trade — hollow triangle = entry, filled = exit (▲ buy, ▼ sell), dotted line with the result in R; working limit / position as lines. Click a trade in BOT to jump to it.", sym: true, proxy: true,
+    tfs: ["1m", "5m", "15m", "1h"],
+    mount(ctx) {
+      const s = ctx.sym, proxy = QT.PROXY[s];
+      if (!proxy) { ctx.el.innerHTML = `<div class="note">Бот торгует только NQ и ES. Открой <b>BOTGP NQ</b> или <b>BOTGP ES</b>.</div>`; return; }
+      QT.startSetups && QT.startSetups();
+      const tf = QT.tfIn(ctx.args, "5m"), step = TFSEC[tf] || 300, src = QT.src(s);
+      ctx.setTitle(`${proxy.name} · сделки бота · ${tf.toUpperCase()}`);
+      ctx.el.innerHTML = `<div class="chart"></div><div class="gtb"><span class="ghint">△ вход · ▲ выход · ▲ покупка ▼ продажа · ○ лимит выставлен</span></div>`;
+      const box = ctx.el.firstChild;
+      const chart = QT.chart(box);
+      const candles = chart.addCandlestickSeries({ ...QT.candleStyle, priceLineColor: "#666" });
+      let bars = [], r = 1, trades = [], lines = [], dead = false, req = null;
+
+      const idxAt = (tSec) => { let lo = 0, hi = bars.length - 1, ans = -1; while (lo <= hi) { const m = (lo + hi) >> 1; if (bars[m].time <= tSec) { ans = m; lo = m + 1; } else hi = m - 1; } return ans; };
+      const xAt = (ms) => { const i = idxAt(Math.floor(ms / 1000)); return i < 0 ? null : chart.timeScale().logicalToCoordinate(i); };
+      const tri = (g, x, y, up, filled, color) => {
+        const w = 6, h = 10, yb = up ? y + h : y - h;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(x - w, yb); g.lineTo(x + w, yb); g.closePath();
+        if (filled) { g.fillStyle = color; g.fill(); } else { g.fillStyle = "#060606"; g.fill(); g.lineWidth = 1.5; g.strokeStyle = color; g.stroke(); }
+      };
+      const view = { draw(target) { target.useMediaCoordinateSpace(({ context: g }) => {
+        g.font = "10px IBM Plex Mono, Consolas"; g.textAlign = "left";
+        for (const t of trades) {
+          const buyIn = t.bull, cIn = buyIn ? "#f2f2f2" : "#a8a8a8", cOut = buyIn ? "#a8a8a8" : "#f2f2f2";
+          const x1 = xAt(t.fillT), y1 = candles.priceToCoordinate(t.entry);
+          const x0 = t.setup === "RB" ? xAt(t.t) : null;
+          if (x0 != null && y1 != null && t.t < t.fillT) { g.beginPath(); g.arc(x0, y1, 3, 0, Math.PI * 2); g.lineWidth = 1; g.strokeStyle = "#8a8a8a"; g.stroke(); }
+          const out = t.exitT != null && t.exitPx != null;
+          const x2 = out ? xAt(t.exitT) : null, y2 = out ? candles.priceToCoordinate(t.exitPx) : null;
+          if (x1 != null && y1 != null && x2 != null && y2 != null) {
+            g.setLineDash([2, 3]); g.lineWidth = 1; g.strokeStyle = t.res >= 0 ? "rgba(255,255,255,0.7)" : "rgba(150,150,150,0.7)";
+            g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]);
+          }
+          if (x1 != null && y1 != null) tri(g, x1, y1, buyIn, false, cIn);
+          if (x2 != null && y2 != null) {
+            tri(g, x2, y2, !buyIn, true, cOut);
+            const lab = `${t.res >= 0 ? "+" : ""}${t.res.toFixed(1)}R`, ly = buyIn ? y2 - 13 : y2 + 21;
+            g.fillStyle = "rgba(0,0,0,0.7)"; g.fillRect(x2 + 7, ly - 9, g.measureText(lab).width + 4, 12);
+            g.fillStyle = t.res >= 0 ? "#ffffff" : "#9a9a9a"; g.fillText(lab, x2 + 9, ly);
+          }
+        }
+      }); } };
+      const prim = { attached(p) { req = p.requestUpdate; }, detached() { req = null; }, updateAllViews() {}, paneViews: () => [{ zOrder: () => "top", renderer: () => view }] };
+      candles.attachPrimitive(prim);
+
+      const paintTrades = () => {
+        if (dead) return;
+        // closed and open trades from the forward log, plus this scan's live ones that aren't logged yet
+        const logged = QT.botTrades().filter((t) => t.sym === s);
+        const ids = new Set(logged.map((t) => t.id));
+        const live = ((QT.setups[s] || {}).sigs || []).filter((x) => x.valid && x.fillT && !ids.has(x.id) && x.t >= (QT.sigSince || 0));
+        trades = [...logged, ...live];
+        lines.forEach((pl) => { try { candles.removePriceLine(pl); } catch {} }); lines = [];
+        for (const x of ((QT.setups[s] || {}).sigs || []).filter((y) => y.valid && (y.state === "limit" || y.state === "open"))) {
+          lines.push(candles.createPriceLine({ price: x.entry, color: "#ffffff", lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: x.state === "limit" ? `ЛИМИТ ${x.bull ? "BUY" : "SELL"}` : `${x.bull ? "LONG" : "SHORT"} ${x.res >= 0 ? "+" : ""}${(x.res || 0).toFixed(2)}R` }));
+          lines.push(candles.createPriceLine({ price: x.stop, color: "#8a8a8a", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "СТОП" }));
+          lines.push(candles.createPriceLine({ price: x.target, color: "#e6e6e6", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "ЦЕЛЬ 2R" }));
+        }
+        const closed = trades.filter((t) => t.exitT != null && t.state !== "open"), pnl = closed.reduce((a, t) => a + (t.usd ?? 0), 0);
+        ctx.setMeta(`${closed.length} сделок · ${F.sgn(pnl, `${pnl >= 0 ? "+" : "−"}$${F.num(Math.abs(pnl), 0)}`)}`);
+        if (req) req();
+      };
+      const focus = (t) => { const i = idxAt(Math.floor(t / 1000)); if (i >= 0) chart.timeScale().setVisibleLogicalRange({ from: i - 70, to: i + 50 }); };
+
+      (async () => {
+        try {
+          r = await QT.ensureRatio(s);
+          const n = Math.max(600, Math.min(5000, Math.ceil((Date.now() - (QT.sigSince || Date.now())) / 1000 / step) + 200));
+          const k = await QT.klines(src, tf, n, 60e3);
+          if (dead) return;
+          bars = k.map((x) => ({ time: x[0] / 1000, open: x[1] * r, high: x[2] * r, low: x[3] * r, close: x[4] * r }));
+          candles.applyOptions({ priceFormat: { type: "price", precision: 2, minMove: 0.01 } });
+          candles.setData(bars);
+          chart.timeScale().setVisibleLogicalRange({ from: bars.length - 220, to: bars.length + 6 });
+          paintTrades();
+        } catch (e) { ctx.error(e); }
+      })();
+      const unsub = QT.ws(`${QT.BN_WS}${src.toLowerCase()}usdt@kline_${tf}`, (d) => {
+        const k = d.k; if (!k || !bars.length) return;
+        const b = { time: k.t / 1000, open: k.o * r, high: k.h * r, low: k.l * r, close: k.c * r }, last = bars[bars.length - 1];
+        if (b.time === last.time) bars[bars.length - 1] = b; else if (b.time > last.time) bars.push(b); else return;
+        candles.update(b);
+      });
+      const offs = [QT.on("setups", paintTrades), QT.on("siglog", paintTrades), QT.on("bot-focus", (f) => { if (f.sym === s) focus(f.t); })];
+      return () => { dead = true; unsub(); offs.forEach((f) => f()); try { candles.detachPrimitive(prim); } catch {} chart.remove(); };
     },
   };
 })();

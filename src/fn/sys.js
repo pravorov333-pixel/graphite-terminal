@@ -7,7 +7,7 @@
     ["MACRO & BACKGROUND", ["MKTS", "INFL", "NLIQ", "YLD", "COT", "SEAS", "CORR", "DOM", "FNG", "FEES"]],
     ["NEWS & CALENDAR", ["NEWS", "ECO"]],
     ["ANALYTICS & TOOLS", ["TOPDOWN", "EARN", "PLAN", "ICT", "SCR", "CALC"]],
-    ["SETUPS & JOURNAL", ["SETUP", "BOT", "JOURNAL"]],
+    ["SETUPS & JOURNAL", ["SETUP", "BOT", "BOTGP", "JOURNAL"]],
     ["OUR BOOK", ["PORT", "SIG", "RISK", "ORD"]],
     ["SYSTEM", ["ALRT", "GUIDE", "HELP"]],
   ];
