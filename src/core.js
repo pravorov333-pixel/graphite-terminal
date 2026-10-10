@@ -350,10 +350,47 @@
     a.kind === "LIQ" ? `LIQ ${a.sym ? a.sym + " " : ""}> ${F.usd(a.val)}`
       : a.kind === "FR" ? `${a.sym} FUNDING ANN ${a.op} ${a.val}%` : `${a.sym} ${a.op} ${a.val}`;
   // system notification + fired-alert log; also used by the economic calendar
+  // every notification (price alerts, calendar, SETUP signals): a card on top of every window + a sound.
+  // Desktop app: an always-on-top card from the main process; browser version: a system notification and a card
+  // inside the page. First line = title; "VALID SETUP" cards are louder and stay longer.
+  QT.soundOn = () => QT.load("soundOn", true);
+  let actx = null;
+  QT.beep = (level = "info") => {
+    if (!QT.soundOn()) return;
+    try {
+      actx ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === "suspended") actx.resume();
+      const notes = level === "setup" ? [[660, 0], [880, 0.14], [1320, 0.28], [1320, 0.5]] : [[880, 0], [660, 0.16]];
+      for (const [f, at] of notes) {
+        const o = actx.createOscillator(), g = actx.createGain(), t0 = actx.currentTime + at;
+        o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(level === "setup" ? 0.35 : 0.22, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+        o.connect(g).connect(actx.destination); o.start(t0); o.stop(t0 + 0.14);
+      }
+    } catch {}
+  };
+  const pageCard = (title, body, level) => {
+    let box = document.getElementById("toasts");
+    if (!box) { box = document.createElement("div"); box.id = "toasts"; document.body.appendChild(box); }
+    const el = document.createElement("div");
+    el.className = "toast" + (level === "setup" ? " setup" : "");
+    el.innerHTML = `<b>${QT.esc(title)}</b>${body ? `<pre>${QT.esc(body)}</pre>` : ""}`;
+    el.onclick = () => el.remove();
+    box.prepend(el); while (box.children.length > 4) box.lastChild.remove();
+    setTimeout(() => el.remove(), level === "setup" ? 60000 : 15000);
+  };
   QT.notify = (text) => {
     QT.alertLog.unshift({ t: Date.now(), text });
     saveAlerts();
-    try { new Notification(QT.appName || "Terminal", { body: text, silent: false }); } catch {}
+    let [title, ...rest] = String(text).split("\n"), body = rest.join("\n");
+    if (!body && title.includes(": ")) { const i = title.indexOf(": "); body = title.slice(i + 2); title = title.slice(0, i); }
+    const level = /VALID SETUP/.test(title) ? "setup" : "info";
+    if (window.api && window.api.alert) window.api.alert({ title, body, level, app: (QT.appName || "Graphite").toUpperCase() }).catch(() => {});
+    else {
+      try { new Notification(title, { body, silent: true, requireInteraction: level === "setup" }); } catch {}
+      pageCard(title, body, level);
+    }
+    QT.beep(level);
     QT.emit("alert-fired", text);
   };
   function fire(a, text) {

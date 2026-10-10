@@ -104,6 +104,13 @@ footer { border-top: 1px solid var(--l); }
 #cmd::placeholder { color: #444; text-transform: none; letter-spacing: 0; }
 #suggest { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; min-width: 0; }
 #suggest b { color: var(--fg); font-weight: 500; }
+/* browser version only: notification cards inside the page (the desktop app shows them above every window) */
+#toasts { position: fixed; right: 12px; bottom: 44px; z-index: 100; display: flex; flex-direction: column; gap: 8px; width: 380px; }
+.toast { background: #000; border: 1px solid var(--mid); padding: 9px 11px; cursor: pointer; }
+.toast.setup { border-color: var(--hi); }
+.toast b { display: block; color: #000; background: var(--mid); padding: 2px 6px; margin-bottom: 5px; font-weight: 600; }
+.toast.setup b { background: var(--hi); }
+.toast pre { margin: 0; font: 11.5px/1.45 var(--mono); color: var(--fg); white-space: pre-wrap; }
 
 /* ---------- heatmap */
 .hm { position: absolute; inset: 0; }

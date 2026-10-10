@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld("api", {
   bookBase: () => ipcRenderer.invoke("book-base"),
   open: (url) => ipcRenderer.invoke("open", url),
   appName: () => ipcRenderer.invoke("app-name"),
+  alert: (a) => ipcRenderer.invoke("alert", a),
 });

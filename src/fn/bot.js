@@ -95,8 +95,8 @@
             + `<div class="note" style="line-height:1.7">${checks.map((c) => `${c.ok === false ? "✗" : c.ok === null ? "⚠" : "✓"} ${QT.esc(c.txt)}`).join("<br>")}</div>`;
         }).join("");
         const ncfg = QT.notifyCfg ? QT.notifyCfg() : {};
-        const notif = `<div class="tdsw" style="padding:4px 8px 8px;flex-wrap:wrap">${FLTS.slice(1).map(([v, t]) => `<span class="tag${ncfg[v] !== false ? " on" : ""}" data-nt="${v}" style="cursor:pointer" title="Уведомления по ${t}: ${ncfg[v] !== false ? "включены" : "выключены"}">${ncfg[v] !== false ? "● ВКЛ" : "○ ВЫКЛ"} ${t}</span>`).join("")}<span class="tag" data-ntest style="cursor:pointer">ПРОВЕРИТЬ УВЕДОМЛЕНИЕ</span></div>`
-          + `<div class="note" style="padding-top:0">Уведомление Windows приходит, когда сетап становится VALID: где ставить лимит (или вход по рынку для 10:00), стоп, цель, сколько контрактов, до какого времени держать лимит и список проверок ✓. Потом — «лимит исполнен», «перенеси стоп в безубыток» (RB по видео), «сними лимит», «сделка закрыта». ⚠ — важные новости США в ближайшие 15 минут. Работает, пока терминал открыт.</div>`;
+        const notif = `<div class="tdsw" style="padding:4px 8px 8px;flex-wrap:wrap">${FLTS.slice(1).map(([v, t]) => `<span class="tag${ncfg[v] !== false ? " on" : ""}" data-nt="${v}" style="cursor:pointer" title="Уведомления по ${t}: ${ncfg[v] !== false ? "включены" : "выключены"}">${ncfg[v] !== false ? "● ВКЛ" : "○ ВЫКЛ"} ${t}</span>`).join("")}<span class="tag${QT.soundOn() ? " on" : ""}" data-snd style="cursor:pointer">${QT.soundOn() ? "● ЗВУК" : "○ ЗВУК"}</span><span class="tag" data-ntest style="cursor:pointer">ПРОВЕРИТЬ УВЕДОМЛЕНИЕ</span></div>`
+          + `<div class="note" style="padding-top:0">Карточка всплывает поверх всех окон (браузер, полноэкранное приложение) в правом нижнем углу экрана со звуком, значок терминала на панели задач мигает; клик по карточке — открыть терминал. Приходит, когда сетап становится VALID: где ставить лимит (или вход по рынку для 10:00), стоп, цель, сколько контрактов, до какого времени держать лимит и список проверок ✓. Потом — «лимит исполнен», «перенеси стоп в безубыток» (RB по видео), «сними лимит», «сделка закрыта». ⚠ — важные новости США в ближайшие 15 минут. Работает, пока терминал открыт.</div>`;
         // the picked strategy's description, or a one-line overview of all four
         const S0 = STRATS[flt];
         const about = S0 ? `<div class="sec">${QT.esc(S0.name).toUpperCase()} · <span class="tag on">${S0.status}</span></div><div class="note" style="color:var(--fg)">${S0.idea}</div>`
@@ -114,6 +114,7 @@
         body.querySelectorAll("[data-pick]").forEach((tr) => (tr.onclick = () => QT.setBotFlt(tr.dataset.pick)));
         body.querySelectorAll("[data-nt]").forEach((x) => (x.onclick = () => QT.setNotify(x.dataset.nt, QT.notifyCfg()[x.dataset.nt] === false)));
         const nt = body.querySelector("[data-ntest]"); if (nt) nt.onclick = () => { QT.setupTestNotify(); nt.textContent = "✓ ОТПРАВЛЕНО"; };
+        const sn = body.querySelector("[data-snd]"); if (sn) sn.onclick = () => { QT.save("soundOn", !QT.soundOn()); if (QT.soundOn()) QT.beep("info"); paint(); };
         ctx.setMeta(`${flt === "ALL" ? "" : STRATS[flt].name + " · "}${usd(realized + unreal)} · ${closed.length} сделок${open.length ? " · в позиции" : ""}`);
       };
       paint();
