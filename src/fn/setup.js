@@ -39,13 +39,13 @@
     const follow = (sig, from, firstBarStop) => {
       const d = sig.bull ? 1 : -1, cost = (COST * sig.entry) / sig.R;
       sig.fillT = k5[from][0];
-      if (firstBarStop && hitStop(d, from, sig.stop)) return Object.assign(sig, { state: "stop", res: -1 - cost, exitT: k5[from][0] });
+      if (firstBarStop && hitStop(d, from, sig.stop)) return Object.assign(sig, { state: "stop", res: -1 - cost, exitT: k5[from][0], exitPx: sig.stop });
       for (let k = from + 1; k < Math.min(n, from + 1 + HOLD); k++) {
-        if (hitStop(d, k, sig.stop)) return Object.assign(sig, { state: "stop", res: -1 - cost, exitT: k5[k][0] });
-        if (hitTgt(d, k, sig.target)) return Object.assign(sig, { state: "target", res: TGT - cost, exitT: k5[k][0] });
+        if (hitStop(d, k, sig.stop)) return Object.assign(sig, { state: "stop", res: -1 - cost, exitT: k5[k][0], exitPx: sig.stop });
+        if (hitTgt(d, k, sig.target)) return Object.assign(sig, { state: "target", res: TGT - cost, exitT: k5[k][0], exitPx: sig.target });
       }
-      if (from + HOLD <= closedTo) { const k = from + HOLD; return Object.assign(sig, { state: "time", res: ((c[k] - sig.entry) * d) / sig.R - cost, exitT: k5[k][0] }); }
-      return Object.assign(sig, { state: "open", res: ((c[n - 1] - sig.entry) * d) / sig.R });
+      if (from + HOLD <= closedTo) { const k = from + HOLD; return Object.assign(sig, { state: "time", res: ((c[k] - sig.entry) * d) / sig.R - cost, exitT: k5[k][0], exitPx: c[k] }); }
+      return Object.assign(sig, { state: "open", res: ((c[n - 1] - sig.entry) * d) / sig.R, lastPx: c[n - 1] });
     };
 
     const sigs = [];
@@ -107,10 +107,14 @@
     for (const s of r.sigs) {
       if (s.t < QT.sigSince) continue;
       const old = byId.get(s.id);
-      if (old && FINAL.has(old.state)) continue;               // frozen once resolved
+      if (old && FINAL.has(old.state)) {                        // frozen once resolved; older entries get the bot's fields once
+        if (old.qty == null) { const z = size(s.R, s.sym); Object.assign(old, { qty: z ? z.mini : 0, unit: z ? z.nm : "", pv: z ? QT.PROXY[s.sym].pv[1] : 0, exitPx: s.exitPx, fillT: old.fillT || s.fillT }); changed = true; }
+        continue;
+      }
       if (old && old.state === s.state && Math.abs((old.res ?? 0) - (s.res ?? 0)) < 0.005) continue;
       const fresh = now - (s.exitT || s.actT) < 15 * 60e3;
-      const entry = { ...s, seen: old ? old.seen : now, late: old ? old.late : now - s.actT > 15 * 60e3 };
+      const z = size(s.R, s.sym);
+      const entry = { ...s, seen: old ? old.seen : now, late: old ? old.late : now - s.actT > 15 * 60e3, qty: old && old.qty != null ? old.qty : z ? z.mini : 0, unit: z ? z.nm : "", pv: z ? QT.PROXY[s.sym].pv[1] : 0 };
       if (old) Object.assign(old, entry); else QT.sigLog.unshift(entry);
       changed = true;
       if (s.valid && fresh && (!old || old.state !== s.state) && !entry.late) QT.notify(msg(s));

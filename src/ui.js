@@ -12,7 +12,7 @@
     { id: "IDEAS", ru: "ИДЕИ", layout: "L1", panels: ["SCR VOL>20M", "FR ALL", "MOV", "HMAP"] },
     { id: "MACRO", ru: "МАКРО", layout: "L5", panels: ["INFL", "YLD", "NLIQ NQ", "COT", "SEAS", "CORR", "MKTS", "DOM", "ECO"] },
     { id: "ICT", ru: "ICT", layout: "L2", panels: ["ICT NQ 15M", "GP NQ 5M", "PLAN NQ", "DUO NQ ES 5M", "CALC NQ", "ECO"] },
-    { id: "SETUP", ru: "СЕТАПЫ", layout: "L2", panels: ["SETUP NQ", "GP NQ 5M", "JOURNAL", "SETUP ES", "GP ES 5M", "ECO"], sizes: { L2: { c: [1, 1.15, 1.35], r: [1, 1] } } },
+    { id: "SETUP", ru: "СЕТАПЫ", layout: "L2", panels: ["SETUP NQ", "GP NQ 5M", "BOT", "SETUP ES", "GP ES 5M", "JOURNAL"], sizes: { L2: { c: [1, 1.15, 1.35], r: [1, 1] } } },
     { id: "BOOK", ru: "ПОРТФЕЛЬ", layout: "L2", panels: ["PORT", "SIG", "RISK", "ORD", "ALRT", "BASIS"] },
   ];
   const FILL = ["WL", "GP", "FR", "NEWS", "ECO", "MKTS", "LIQ", "GUIDE", "HELP"];
@@ -43,6 +43,8 @@
   if (store.v < 5) { delete store.spaces.MACRO; store.v = 5; }
   // v6: OVERVIEW opens with the real-time world board
   if (store.v < 6) { delete store.spaces.OVERVIEW; store.v = 6; }
+  // v7: СЕТАПЫ got the paper bot
+  if (store.v < 7) { delete store.spaces.SETUP; store.v = 7; }
   let state = store.spaces[store.cur] || preset(store.cur);
   QT.focusSym = QT.load("focus", "BTC");
   let active = 0, prev = null;

@@ -128,7 +128,7 @@
     mount(ctx) {
       const tf = QT.tfIn(ctx.args, "1h"), s = ctx.sym, src = QT.src(s), proxy = QT.PROXY[s], fx = QT.isFx(s);
       ctx.setTitle(`${proxy ? proxy.name + " · " : ""}${tf.toUpperCase()} · SMA50 · VWAP`);
-      ctx.el.innerHTML = `<div class="chart"></div><div class="gtb"><span class="gb" data-a="lv" title="Пулы ликвидности и ключевые открытия (00:00 / 09:30 / 10:00 NY) с вероятностями">УРОВНИ</span><span class="gb" data-a="zn" title="Rejection / order blocks и FVG (15m) с вероятностью реакции">ЗОНЫ</span><span class="gb" data-a="kz" title="Киллзоны: Азия 20–22, Лондон 02–04, NY AM 08:30–10:30, NY PM 13:30–15:30 (время NY)">КИЛЛЗОНЫ</span><span class="gb" data-a="add">＋ ЛИНИЯ</span><span class="gb" data-a="clr"></span><span class="ghint"></span></div>`;
+      ctx.el.innerHTML = `<div class="chart"></div><div class="gtb"><span class="gb" data-a="lv" title="Пулы ликвидности и ключевые открытия (00:00 / 09:30 / 10:00 NY) с вероятностями">УРОВНИ</span><span class="gb" data-a="zn" title="Rejection / order blocks и FVG (15m) с вероятностью реакции">ЗОНЫ</span><span class="gb" data-a="kz" title="Киллзоны: Азия 20–22, Лондон 02–04, NY AM 08:30–10:30, NY PM 13:30–15:30 (время NY)">КИЛЛЗОНЫ</span>${proxy ? '<span class="gb" data-a="st" title="Сделки бота SETUP: стрелка — вход, кружок — выход с результатом в R; активный лимит / позиция — линии вход, стоп, цель">СЕТАПЫ</span>' : ""}<span class="gb" data-a="add">＋ ЛИНИЯ</span><span class="gb" data-a="clr"></span><span class="ghint"></span></div>`;
       const box = ctx.el.firstChild, tb = ctx.el.querySelector(".gtb");
       const chart = QT.chart(box);
       // CLEAN charts (trading / index screens) keep their own toggle set, all ICT layers off by default
@@ -146,7 +146,8 @@
       const sma = chart.addLineSeries({ color: "#777", lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       const vwap = chart.addLineSeries({ color: "#ffffff", lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
       const intraday = !/d|w/.test(tf);
-      let bars = [], r = 1, lvLines = [], userLines = [], arming = false, dead = false;
+      let bars = [], r = 1, lvLines = [], userLines = [], setLines = [], arming = false, dead = false;
+      const stOn = () => !!proxy && opt.st !== false;          // SETUP trades: on by default on NQ / ES
 
       const smaAt = (i) => { if (i < 49) return null; let x = 0; for (let k = i - 49; k <= i; k++) x += bars[k].close; return x / 50; };
       const vwapSeries = () => {
@@ -176,6 +177,7 @@
         tb.querySelector('[data-a="zn"]').classList.toggle("on", opt.zn);
         tb.querySelector('[data-a="kz"]').classList.toggle("on", opt.kz && intraday && !!tfMin);
         tb.querySelector('[data-a="add"]').classList.toggle("on", arming);
+        if (proxy) tb.querySelector('[data-a="st"]').classList.toggle("on", stOn());
         const n = (QT.lines[s] || []).length;
         const clr = tb.querySelector('[data-a="clr"]'); clr.textContent = n ? `✕ ЛИНИИ ${n}` : ""; clr.style.display = n ? "" : "none";
         tb.querySelector(".ghint").textContent = arming ? "кликни по графику — линия встанет на эту цену" : n ? "Alt+клик по линии — удалить" : "";
@@ -197,6 +199,26 @@
           zov.set(opt.zn && tfMin && tfMin <= 60 ? eng.zones : []);
         } catch (e) { console.warn("ict engine", e); }
       };
+      // SETUP signals with the trend (what the paper bot trades): entry arrows, exit dots with R, live order / position lines
+      const drawSetups = () => {
+        if (dead || !proxy) return;
+        setLines.forEach((pl) => candles.removePriceLine(pl)); setLines = [];
+        const sc = QT.setups[s];
+        if (!stOn() || !sc || !sc.sigs || !bars.length) { candles.setMarkers([]); return; }
+        const step = (tfMin || 1440) * 60, t0 = bars[0].time, t1 = bars[bars.length - 1].time, snap = (ms) => Math.floor(ms / 1000 / step) * step, mk = [];
+        for (const x of sc.sigs) {
+          if (!x.valid || !x.fillT) continue;
+          const tin = snap(x.fillT);
+          if (tin >= t0 && tin <= t1) mk.push({ time: tin, position: x.bull ? "belowBar" : "aboveBar", color: "#ffffff", shape: x.bull ? "arrowUp" : "arrowDown", text: x.setup === "RB" ? "RB" : "10:00" });
+          if (x.exitT && x.res != null) { const tout = snap(x.exitT); if (tout >= t0 && tout <= t1) mk.push({ time: tout, position: x.bull ? "aboveBar" : "belowBar", color: x.res >= 0 ? "#ffffff" : "#8a8a8a", shape: "circle", text: `${x.res >= 0 ? "+" : ""}${x.res.toFixed(1)}R` }); }
+        }
+        candles.setMarkers(mk.sort((a, b) => a.time - b.time));
+        for (const x of sc.sigs.filter((y) => y.valid && (y.state === "limit" || y.state === "open"))) {
+          setLines.push(candles.createPriceLine({ price: x.entry, color: "#ffffff", lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: x.state === "limit" ? `ЛИМИТ ${x.bull ? "BUY" : "SELL"}` : `${x.bull ? "LONG" : "SHORT"} ${x.setup === "RB" ? "RB" : "10:00"}` }));
+          setLines.push(candles.createPriceLine({ price: x.stop, color: "#8a8a8a", lineWidth: 1, lineStyle: 0, axisLabelVisible: true, title: "СТОП" }));
+          setLines.push(candles.createPriceLine({ price: x.target, color: "#e6e6e6", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "ЦЕЛЬ 2R" }));
+        }
+      };
       const paintKz = () => kz.setData(opt.kz && intraday && tfMin ? bars.map(kzBar) : []);
 
       (async () => {
@@ -215,7 +237,7 @@
           sma.setData(bars.map((b, i) => ({ time: b.time, value: smaAt(i) })).filter((p) => p.value != null));
           if (intraday) vwap.setData(vwapSeries());
           chart.timeScale().setVisibleLogicalRange({ from: bars.length - 160, to: bars.length + 4 });
-          drawUser(); drawLevels(); meta();
+          drawUser(); drawLevels(); drawSetups(); meta();
         } catch (e) { ctx.error(e); }
       })();
 
@@ -250,6 +272,7 @@
         if (a === "lv") { opt.lv = !opt.lv; QT.save(optKey, opt); drawLevels(); }
         if (a === "zn") { opt.zn = !opt.zn; QT.save(optKey, opt); drawLevels(); }
         if (a === "kz") { opt.kz = !opt.kz; QT.save(optKey, opt); paintKz(); }
+        if (a === "st") { opt.st = !stOn(); QT.save(optKey, opt); drawSetups(); }
         if (a === "add") arming = !arming;
         if (a === "clr") { delete QT.lines[s]; saveLines(); }
         paintTb();
@@ -269,7 +292,7 @@
         }
       });
       paintTb(); meta();
-      const offs = [QT.on("ticker", meta), QT.on("lines", drawUser)];
+      const offs = [QT.on("ticker", meta), QT.on("lines", drawUser), QT.on("setups", drawSetups)];
       ctx.every(90000, drawLevels);
       return () => { dead = true; unsub(); offs.forEach((f) => f()); zov.destroy(); chart.remove(); };
     },
