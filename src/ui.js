@@ -428,7 +428,8 @@
   }
 
   const sugg = () => document.getElementById("suggest");
-  function say(text) { sugg().textContent = text; }
+  // one line only: multi-line notifications (SETUP cards) are joined, and the line never widens the layout
+  function say(text) { const el = sugg(); el.textContent = String(text).replace(/\s*\n\s*/g, " · "); el.title = String(text); }
 
   function suggest(v) {
     const toks = v.trim().toUpperCase().split(/\s+/), last = toks[toks.length - 1] || "";

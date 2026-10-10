@@ -110,13 +110,54 @@
   };
   QT.setupSize = size;
   const arrow = (b) => (b ? "▲ LONG" : "▼ SHORT");
+
+  // which strategies send notifications (BOT → УВЕДОМЛЕНИЯ); the unproven RB + фибо is off until switched on
+  QT.notifyCfg = () => ({ RB: true, "10AM": true, RBF: false, RBV: true, ...QT.load("notifyCfg", {}) });
+  QT.setNotify = (k, on) => { QT.save("notifyCfg", { ...QT.notifyCfg(), [k]: on }); QT.emit("notify-cfg"); };
+  // high-impact US releases from the calendar (refreshed by the watcher), for the ±15 min news warning
+  let eco = [];
+  const newsNear = (t = Date.now()) => {
+    const x = eco.find((e) => e.country === "USD" && e.impact === "High" && e.t >= t - 15 * 60e3 && e.t <= t + 15 * 60e3);
+    return x ? { title: x.title, min: Math.round((x.t - t) / 60e3) } : null;
+  };
+  // why a signal is (or isn't) a valid setup: every rule of its strategy, ✓ / ✗, plus warnings that don't block it
+  QT.setupChecks = (s) => {
+    const out = [], ok = (c, txt) => out.push({ ok: !!c, txt }), warn = (txt) => out.push({ ok: null, txt });
+    const dayRule = () => ok(!s.risk || s.risk === "ok", !s.risk || s.risk === "ok" ? "правила дня: ≤ 3 сделок, нет 2 стопов подряд, нет позиции" : s.risk);
+    if (s.setup === "RB") {
+      ok(true, "RB 15m: цена коснулась края зоны"); ok(s.trend, s.trend ? "по тренду 15m (SMA50)" : "против тренда 15m");
+      ok(true, `лимит в середину зоны (CE), стоп за тенью, цель 2R`);
+    } else if (s.setup === "10AM") {
+      ok(true, "пробой открытия 10:00 NY и возврат"); ok(true, "свеча возврата закрылась в окне 10:00–12:00 NY");
+      out.push({ ok: s.trend ? true : null, txt: s.trend ? "по тренду 15m" : "против тренда 15m (в бэктесте хуже, но допустимо)" });
+    } else if (s.setup === "RBF") {
+      ok(s.trend, s.trend ? "по тренду 15m" : "против тренда 15m"); ok(!!s.ctx, `контекст: ${s.ctx || "нет"}`);
+      ok(s.fib >= 0.62 && s.fib <= 0.79 + 1e-9, `открытие RB в зоне фибо 0.62–0.79 (сейчас ${(s.fib || 0).toFixed(2)})`); dayRule();
+    } else if (s.setup === "RBV") {
+      ok(s.trend, s.trend ? "импульс по тренду 15m" : "против тренда 15m"); ok(!!s.ctx, `контекст: ${s.ctx || "нет"}`);
+      ok(s.fib >= 0.62 && s.fib <= 1, `тень RB в OTE (фибо ${(s.fib || 0).toFixed(2)}), не ниже начала импульса`);
+      ok(true, "начало RB в дисконте ≥ 0.5 · закрытие в сторону сделки"); dayRule();
+    }
+    const z = size(s.R, s.sym);
+    ok(z && z.mini >= 1, z && z.mini >= 1 ? `размер: ${z.mini} ${z.nm} на риск $${QT.setupCfg().riskUsd}` : `даже 1 ${z ? z.nm : "контракт"} рискует больше $${QT.setupCfg().riskUsd}`);
+    const nw = newsNear();
+    if (nw) warn(`новости ${nw.min >= 0 ? `через ${nw.min} мин` : `${-nw.min} мин назад`}: ${nw.title} — лучше пропусти`);
+    return out;
+  };
+  QT.setupValid = (s) => s.valid && QT.setupChecks(s).every((c) => c.ok !== false);
+  const hmL = (ms) => new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  const checkLine = (s) => QT.setupChecks(s).map((c) => `${c.ok === false ? "✗" : c.ok === null ? "⚠" : "✓"} ${c.txt}`).join("\n");
   const msg = (s) => {
     const z = size(s.R, s.sym), sz = z ? ` · ${z.mini} ${z.nm}` : "", lv = `стоп ${F.num(s.stop, 2)} · цель ${F.num(s.target, 2)}${sz}`;
     const name = `${s.sym} ${SETUP_RU[s.setup]} ${arrow(s.bull)}`;
-    if (s.state === "limit") return `${name}: поставь лимит ${F.num(s.entry, 2)} · ${lv}${s.setup === "RBF" || s.setup === "RBV" ? ` · ${s.ctx}, фибо ${(s.fib || 0).toFixed(2)}` : ""}${s.setup === "RBV" ? " · лимит на 3 свечи" : ""}`;
+    if (s.state === "limit") {
+      // the full card: where the order goes, size, until when, and every rule that makes it valid
+      const until = s.setup === "RBV" ? s.placeT + 4 * BAR : s.setup === "RBF" ? s.t + 48 * BAR : s.t + WAIT * BAR;
+      return `VALID SETUP · ${name}\nЛимит ${s.bull ? "BUY" : "SELL"} ${F.num(s.entry, 2)} · ${lv} (${s.setup === "RB" ? "2R" : "5R"})\nДействует до ${hmL(until)}\n${checkLine(s)}`;
+    }
     if (s.state === "open" && s.beOn) return `${name}: перенеси стоп в безубыток ${F.num(s.entry, 2)} — внутренний хай снят`;
     if (s.state === "watch") return `${name}: сними лимит — новый экстремум перетянул фибу, вход вне зоны 0.62–0.79`;
-    if (s.state === "open") return s.setup === "10AM" ? `${name}: вход по рынку ~${F.num(s.entry, 2)} · ${lv}` : `${name}: лимит исполнен ${F.num(s.entry, 2)} · ${lv}`;
+    if (s.state === "open") return s.setup === "10AM" ? `VALID SETUP · ${name}\nВход по рынку ~${F.num(s.entry, 2)} (не дальше 0.3R) · ${lv} (2R)\n${checkLine(s)}` : `${name}: лимит исполнен ${F.num(s.entry, 2)} · ${lv}`;
     if (s.state === "cancel") return `${name}: отмени лимит — цена дошла до стопа раньше входа`;
     if (s.state === "expired") return `${name}: сними лимит — 4 часа прошли без исполнения`;
     return `${name}: сделка закрыта — ${s.be ? "БЕЗУБЫТОК" : STATE_RU[s.state]} ${s.res >= 0 ? "+" : ""}${s.res.toFixed(2)}R`;
@@ -137,8 +178,9 @@
       const entry = { ...s, seen: old ? old.seen : now, late: old ? old.late : now - s.actT > 15 * 60e3, qty: old && old.qty != null ? old.qty : z ? z.mini : 0, unit: z ? z.nm : "", pv: z ? QT.PROXY[s.sym].pv[1] : 0 };
       if (old) Object.assign(old, entry); else QT.sigLog.unshift(entry);
       changed = true;
-      if (s.valid && fresh && (!old || old.state !== s.state) && !entry.late) QT.notify(msg(s));
-      else if (s.valid && s.state === "open" && s.beOn && old && !old.beOn && !entry.late) QT.notify(msg(s));     // RB видео: move the stop
+      const on = QT.notifyCfg()[s.setup] !== false;
+      if (on && s.valid && fresh && (!old || old.state !== s.state) && !entry.late) QT.notify(msg(s));
+      else if (on && s.valid && s.state === "open" && s.beOn && old && !old.beOn && !entry.late) QT.notify(msg(s));     // RB видео: move the stop
     }
     if (changed) { QT.sigLog.sort((a, b) => b.t - a.t); QT.sigLog.length = Math.min(QT.sigLog.length, 3000); QT.save("sigLog", QT.sigLog); QT.emit("siglog"); }
   }
@@ -163,6 +205,7 @@
   QT.startSetups = () => {
     if (started) return; started = true;
     const tick = async () => {
+      try { if (QT.loadEco) eco = await QT.loadEco(); } catch {}      // cached 30 min by QT.get
       const fresh = [];
       for (const sym of SYMS) {
         try { const r = await scan(sym); QT.setups[sym] = r; fresh.push(r); }
@@ -176,6 +219,11 @@
   };
   QT.setupScan = scan;
   QT.setupMsg = msg;
+  QT.setupTestNotify = () => {
+    const live = SYMS.flatMap((s) => ((QT.setups[s] || {}).sigs || []).filter((x) => x.valid && x.state === "limit"));
+    const s = live[0] || { sym: "NQ", setup: "RBV", bull: true, entry: 21000, stop: 20990, R: 10, target: 21050, trend: true, ctx: "свип EQL", fib: 0.71, risk: "ok", placeT: Date.now(), t: Date.now(), state: "limit", valid: true };
+    QT.notify((live[0] ? "" : "ТЕСТ (пример) · ") + msg(s));
+  };
 
   // ---------------------------------------------------------------- panel
   const kvHtml = (pairs) => pairs.map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join("");
