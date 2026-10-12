@@ -157,25 +157,34 @@
         g.beginPath(); g.moveTo(x, y); g.lineTo(x - w, yb); g.lineTo(x + w, yb); g.closePath();
         if (filled) { g.fillStyle = color; g.fill(); } else { g.fillStyle = "#060606"; g.fill(); g.lineWidth = 1.5; g.strokeStyle = color; g.stroke(); }
       };
+      // markers sit outside the candle, like the reference: a buy under the bar's low pointing up, a sell above its
+      // high pointing down — never on the candle itself; the dotted line joins the two markers
+      const GAP = 5;
+      const spot = (ms, buy) => {
+        const i = idxAt(Math.floor(ms / 1000)); if (i < 0) return null;
+        const x = chart.timeScale().logicalToCoordinate(i), y = candles.priceToCoordinate(buy ? bars[i].low : bars[i].high);
+        return x == null || y == null ? null : { x, y: buy ? y + GAP : y - GAP };
+      };
       const view = { draw(target) { target.useMediaCoordinateSpace(({ context: g }) => {
         g.font = "10px IBM Plex Mono, Consolas"; g.textAlign = "left";
         for (const t of trades) {
           const buyIn = t.bull, cIn = buyIn ? "#f2f2f2" : "#a8a8a8", cOut = buyIn ? "#a8a8a8" : "#f2f2f2";
-          const x1 = xAt(t.fillT), y1 = candles.priceToCoordinate(t.entry);
-          const x0 = t.setup === "RB" || t.setup === "RBF" || t.setup === "RBV" ? xAt(t.t) : null;
-          if (x0 != null && y1 != null && t.t < t.fillT) { g.beginPath(); g.arc(x0, y1, 3, 0, Math.PI * 2); g.lineWidth = 1; g.strokeStyle = "#8a8a8a"; g.stroke(); }
-          const out = t.exitT != null && t.exitPx != null;
-          const x2 = out ? xAt(t.exitT) : null, y2 = out ? candles.priceToCoordinate(t.exitPx) : null;
-          if (x1 != null && y1 != null && x2 != null && y2 != null) {
-            g.setLineDash([2, 3]); g.lineWidth = 1; g.strokeStyle = t.res >= 0 ? "rgba(255,255,255,0.7)" : "rgba(150,150,150,0.7)";
-            g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.setLineDash([]);
+          const p1 = spot(t.fillT, buyIn);
+          // the moment the limit was placed: a small ring on the entry side of that candle
+          const p0 = (t.setup === "RB" || t.setup === "RBF" || t.setup === "RBV") && t.t < t.fillT ? spot(t.t, buyIn) : null;
+          if (p0) { g.beginPath(); g.arc(p0.x, buyIn ? p0.y + 4 : p0.y - 4, 3, 0, Math.PI * 2); g.lineWidth = 1; g.strokeStyle = "#8a8a8a"; g.stroke(); }
+          const out = t.exitT != null && t.exitPx != null, p2 = out ? spot(t.exitT, !buyIn) : null;
+          if (p1 && p2) {
+            g.setLineDash([2, 3]); g.lineWidth = 1; g.strokeStyle = t.res >= 0 ? "rgba(255,255,255,0.55)" : "rgba(150,150,150,0.55)";
+            g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.stroke(); g.setLineDash([]);
           }
-          if (x1 != null && y1 != null) tri(g, x1, y1, buyIn, false, cIn);
-          if (x2 != null && y2 != null) {
-            tri(g, x2, y2, !buyIn, true, cOut);
-            const lab = `${t.res >= 0 ? "+" : ""}${t.res.toFixed(1)}R`, ly = buyIn ? y2 - 13 : y2 + 21;
-            g.fillStyle = "rgba(0,0,0,0.7)"; g.fillRect(x2 + 7, ly - 9, g.measureText(lab).width + 4, 12);
-            g.fillStyle = t.res >= 0 ? "#ffffff" : "#9a9a9a"; g.fillText(lab, x2 + 9, ly);
+          if (p1) tri(g, p1.x, p1.y, buyIn, false, cIn);
+          if (p2) {
+            tri(g, p2.x, p2.y, !buyIn, true, cOut);
+            // the result beyond the exit marker (above a sell, below a buy), clear of the candles
+            const lab = `${t.res >= 0 ? "+" : ""}${t.res.toFixed(1)}R`, w = g.measureText(lab).width, ly = buyIn ? p2.y - 14 : p2.y + 22;
+            g.fillStyle = "rgba(0,0,0,0.75)"; g.fillRect(p2.x - w / 2 - 2, ly - 9, w + 4, 12);
+            g.fillStyle = t.res >= 0 ? "#ffffff" : "#9a9a9a"; g.textAlign = "center"; g.fillText(lab, p2.x, ly); g.textAlign = "left";
           }
         }
       }); } };
